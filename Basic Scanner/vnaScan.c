@@ -40,8 +40,6 @@ struct datapoint {
  * Closes port and restores initial settings
  */
 void close_and_reset(int serial_port, struct termios* initial_tty) {
-    //printf("close and reseting");
-    fflush(stdout);
     if (tcsetattr(serial_port, TCSANOW, initial_tty) != 0) { // restore settings
         printf("Error %i from tcsetattr, restoring: %s\n", errno, strerror(errno));
     }
@@ -180,8 +178,7 @@ int main() {
 
     struct termios* initial_tty = init_serial_settings(serial_port);
     serial_port_global = serial_port;
-
-    checkConnection(serial_port);
+    //checkConnection(serial_port);
 
     // give scan command
 
@@ -215,7 +212,6 @@ int main() {
 
     struct datapoint data[points];
 
-    char flag = 'x';
     for (int i = 0; i < points; i++) {
         numBytes = read(serial_port, &data[i], sizeof(struct datapoint));
         if (numBytes < 0) {
@@ -223,9 +219,13 @@ int main() {
             close_and_reset(serial_port, initial_tty);
             return 1;
         }
-        if (numBytes == 20) {flag = 'y';}
-        else {flag = 'x';}
-        printf("(%d, %c) %u Hz: S11=%f+%fj, S21=%f+%fj\n", i, flag, data[i].frequency, data[i].s11.re, data[i].s11.im, data[i].s21.re, data[i].s21.im);
+        if (numBytes != 20) {
+            printf("(%d) malformed", i);
+        }
+    }
+
+    for (int i = 0; i < points; i++) {
+        printf("(%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", i, data[i].frequency, data[i].s11.re, data[i].s11.im, data[i].s21.re, data[i].s21.im);
     }
 
     close_and_reset(serial_port, initial_tty);
