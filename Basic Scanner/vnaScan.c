@@ -186,6 +186,7 @@ int main() {
     snprintf(msg, sizeof(char)*50, "scan 50000000 900000000 %i %i\r", POINTS, MASK);
     write(serial_port, msg, sizeof(char)*50);
     free(msg);
+    msg = NULL;
 
     // skip to binary header
 
@@ -210,10 +211,10 @@ int main() {
 
     // recieve output
 
-    struct datapoint data[points];
+    struct datapoint *data = malloc(sizeof(struct datapoint) * points);
 
     for (int i = 0; i < points; i++) {
-        numBytes = read(serial_port, &data[i], sizeof(struct datapoint));
+        numBytes = read(serial_port, data+i, sizeof(struct datapoint));
         if (numBytes < 0) {
             printf("Error reading: %s", strerror(errno));
             close_and_reset(serial_port, initial_tty);
@@ -227,6 +228,9 @@ int main() {
     for (int i = 0; i < points; i++) {
         printf("(%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", i, data[i].frequency, data[i].s11.re, data[i].s11.im, data[i].s21.re, data[i].s21.im);
     }
+
+    free(data);
+    data = NULL;
 
     close_and_reset(serial_port, initial_tty);
     initial_tty = NULL;
