@@ -134,7 +134,7 @@ struct termios* init_serial_settings(int serial_port) {
 /*
  * Issues info command and prints output
  */
-void checkConnection(int serial_port) {
+int checkConnection(int serial_port) {
     int numBytes;
     char buffer[32];
 
@@ -143,11 +143,12 @@ void checkConnection(int serial_port) {
 
     do {
         numBytes = read(serial_port,&buffer,sizeof(char)*31);
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_port_settings_global);return 1;}
         buffer[numBytes] = '\0';
         printf("%s", (unsigned char*)buffer);
     } while (numBytes > 0 && !strstr(buffer,"ch>"));
 
-    return;
+    return 0;
 }
 
 /*
@@ -196,8 +197,10 @@ int main() {
     unsigned char advance;
 
     numBytes = read(serial_port, &short_buffer, sizeof(char)*4);
+    if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_tty);return 1;}
     while (details[0] != actual_details[0] && details[1] != actual_details[1]) {
         numBytes = read(serial_port, &advance, sizeof(char));
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_tty);return 1;}
         for (int i = 0; i < 3; i++) {
             short_buffer[i] = short_buffer[i+1];
         }
@@ -215,14 +218,8 @@ int main() {
 
     for (int i = 0; i < points; i++) {
         numBytes = read(serial_port, data+i, sizeof(struct datapoint));
-        if (numBytes < 0) {
-            printf("Error reading: %s", strerror(errno));
-            close_and_reset(serial_port, initial_tty);
-            return 1;
-        }
-        if (numBytes != 20) {
-            printf("(%d) malformed", i);
-        }
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_tty);return 1;}
+        if (numBytes != 20) {printf("(%d) malformed", i);}
     }
 
     for (int i = 0; i < points; i++) {
