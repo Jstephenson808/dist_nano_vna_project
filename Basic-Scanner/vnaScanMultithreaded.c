@@ -14,6 +14,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #define POINTS 101
 #define MASK 135
@@ -281,7 +282,8 @@ void* scan_consumer(void *args) {
  */
 int main() {
 
-
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
 
     // assign error handler
 
@@ -331,6 +333,10 @@ int main() {
     buffer = NULL;
     close_and_reset(serial_port, initial_tty);
     initial_tty = NULL;
+
+    gettimeofday(&stop, NULL);
+    printf("---\ntook %lf s\n", (double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000);
+    printf("%lfs per point measurement \n", ((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000)/(double)arguments.points);
 
     return 0;
 }
