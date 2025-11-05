@@ -337,6 +337,7 @@ int main() {
     gettimeofday(&stop, NULL);
     printf("---\ntook %lf s\n", (double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000);
     printf("%lfs per point measurement \n", ((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000)/(double)arguments.points);
+    printf("%lfs points per second \n", ((double)arguments.points)/((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000));
 
     return 0;
 }
