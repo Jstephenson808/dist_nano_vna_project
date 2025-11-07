@@ -1,49 +1,5 @@
-// needed for CRTSCTS macro
-#define _DEFAULT_SOURCE
+#include "vnaScanMultithreaded.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <math.h>
-#include <time.h>
-
-#include <fcntl.h>
-#include <errno.h>
-#include <termios.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <sys/time.h>
-
-#define POINTS 101
-#define MASK 135
-#define N 100
-
-//Declaring global variables (for error handling only)
-volatile sig_atomic_t fatal_error_in_progress = 0;
-int serial_port_global = 0;
-struct termios* initial_port_settings_global = NULL;
-
-
-//Declaring structs for data points
-struct complex {
-    float re;
-    float im;
-};
-struct datapoint {
-    uint32_t frequency;
-    struct complex s11;
-    struct complex s21;
-};
-
-//=============================================
-// Port Restoration
-//=============================================
-
-/*
- * Closes port and restores initial settings
- */
 void close_and_reset(int serial_port, struct termios* initial_tty) {
     if (tcsetattr(serial_port, TCSANOW, initial_tty) != 0) { // restore settings
         printf("Error %i from tcsetattr, restoring: %s\n", errno, strerror(errno));
@@ -54,12 +10,6 @@ void close_and_reset(int serial_port, struct termios* initial_tty) {
     close(serial_port);
 }
 
-/*
- * Fatal error handling. 
- * 
- * Calls close_and_reset before allowing the program to exit normally.
- * Uses fatal_error_in_progress to prevent infinite recursion.
- */
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
         raise (sig);
@@ -74,20 +24,6 @@ void fatal_error_signal(int sig) {
     raise (sig);
 }
 
-//=============================================
-// Serial Interface
-//=============================================
-
-/*
- * Amend port settings
- * 
- * Edits port settings to interact with a serial interface.
- * Flags should only be edited with bitwise operations.
- * Writes are permanent: initial settings are kept to restore on program close.
- * 
- * @serial_port should already be opened successfully
- * @return initial settings to restore. Also stored in global variable.
- */
 struct termios* init_serial_settings(int serial_port) {
     struct termios *initial_tty = malloc(sizeof(struct termios)); // keep to restore settings later
     if (tcgetattr(serial_port, initial_tty) != 0) {
@@ -116,7 +52,7 @@ struct termios* init_serial_settings(int serial_port) {
     tty.c_iflag &= ~(IXON | IXOFF | IXANY); // no sw flow ctrl
 
     tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); // no special handling of recieved bytes
-    tty.c_oflag &= ~OPOST; // no special handling of outgoing bytes
+    tty.c_oflag &= ~OPOST; // no special handling of outgoacting as the producer to scan_consumer's consumering bytes
     tty.c_oflag &= ~ONLCR; // no newline conversion
 
     tty.c_cc[VTIME] = 50; // timeout 5 seconds
@@ -132,50 +68,9 @@ struct termios* init_serial_settings(int serial_port) {
     return initial_tty; // remember to restore later
 }
 
-//=============================================
-// Main Program
-//=============================================
-
-/*
- * Issues info command and prints output
- */
-int checkConnection(int serial_port) {
-    int numBytes;
-    char buffer[32];
-
-    unsigned char msg[] = "info\r";
-    write(serial_port, msg, sizeof(msg));
-
-    do {
-        numBytes = read(serial_port,&buffer,sizeof(char)*31);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_port_settings_global);return 1;}
-        buffer[numBytes] = '\0';
-        printf("%s", (unsigned char*)buffer);
-    } while (numBytes > 0 && !strstr(buffer,"ch>"));
-
-    return 0;
-}
-
-struct arg_struct {
-    int serial_port;
-    int points;
-    int start;
-    int stop;
-    struct datapoint **buffer;
-};
-
-int count = 0;
-int in = 0;
-int out = 0;
-short complete = 0;
-pthread_cond_t remove_cond = PTHREAD_COND_INITIALIZER;
-pthread_cond_t fill_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-
 void* scan_producer(void *args) {
 
-    struct arg_struct *arguments = args;
-    //clock_t start_time = clock();
+    struct scan_producer_args *arguments = args;
 
     int total_scans = arguments->points / POINTS;
     int step = (arguments->stop - arguments->start) / total_scans;
@@ -212,10 +107,10 @@ void* scan_producer(void *args) {
 
         // recieve output
 
-        struct datapoint *data = malloc(sizeof(struct datapoint) * POINTS);
+        struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
 
         for (int i = 0; i < POINTS; i++) {
-            numBytes = read(arguments->serial_port, data+i, sizeof(struct datapoint));
+            numBytes = read(arguments->serial_port, data+i, sizeof(struct datapoint_NanoVNAH));
             if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(arguments->serial_port, initial_port_settings_global);return NULL;}
             if (numBytes != 20) {printf("(%d) malformed", i);}
         }
@@ -238,22 +133,22 @@ void* scan_producer(void *args) {
         current += step;
     }
     complete = 1;
-    //printf("---\nProducer took %lf secs\n---\n", (double)(clock() - start_time) / CLOCKS_PER_SEC);
     return NULL;
 }
 
 void* scan_consumer(void *args) {
 
-    struct datapoint **buffer = args;
-    //clock_t start_time = clock();
+    struct datapoint_NanoVNAH **buffer = args;
     int total_count = 0;
 
-    while (complete == 0) {
+    // warning: this outer while loop will cause infinite waiting with multiple consumer threads
+    while (complete == 0 && (count != 0)) {
         pthread_mutex_lock(&lock);
         while (count == 0) {
             pthread_cond_wait(&fill_cond, &lock);
         }
-        struct datapoint *data = buffer[out];
+        struct datapoint_NanoVNAH *data = buffer[out];
+        buffer[out] = NULL;
         out = (out + 1) % N;
         count--;
         pthread_cond_signal(&remove_cond);
@@ -267,8 +162,31 @@ void* scan_consumer(void *args) {
         free(data);
         data = NULL;
     }
-    //printf("---\nConsumer took %lf secs\n---\n", (double)(clock() - start_time) / CLOCKS_PER_SEC);
     return NULL;
+}
+
+void scan_coordinator() {
+    // TODO - implement scan_coordinator
+}
+
+/*
+ * Helper function. Issues info command and prints output
+ */
+int checkConnection(int serial_port) {
+    int numBytes;
+    char buffer[32];
+
+    unsigned char msg[] = "info\r";
+    write(serial_port, msg, sizeof(msg));
+
+    do {
+        numBytes = read(serial_port,&buffer,sizeof(char)*31);
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_port_settings_global);return 1;}
+        buffer[numBytes] = '\0';
+        printf("%s", (unsigned char*)buffer);
+    } while (numBytes > 0 && !strstr(buffer,"ch>"));
+
+    return 0;
 }
 
 /*
@@ -305,9 +223,9 @@ int main() {
 
     // create threads
 
-    struct datapoint **buffer = malloc(sizeof(struct datapoint *)*(N+1));
+    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
 
-    struct arg_struct arguments;
+    struct scan_producer_args arguments;
     arguments.serial_port = serial_port;
     arguments.points = 10100;
     arguments.start = 50000000;
