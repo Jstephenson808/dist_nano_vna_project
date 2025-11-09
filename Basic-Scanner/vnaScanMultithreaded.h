@@ -83,10 +83,11 @@ struct termios init_serial_settings(int serial_port);
 int count = 0;
 int in = 0;
 int out = 0;
-short complete = 0;
 pthread_cond_t remove_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t fill_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+// flag for when the consumer has no more to read. Currently no support for multiple consumers.
+short complete = 0;
 
 /*
  * A thread function to take scans from a NanoVNA onto buffer

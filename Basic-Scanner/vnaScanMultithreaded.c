@@ -178,6 +178,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
     int error = pthread_create(&consumer, NULL, &scan_consumer, buffer);
     if(error != 0){printf("Error %i from create consumer:\n", errno);return;}
 
+    // warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
     for(int i = 0; i < num_vnas; i++) {
