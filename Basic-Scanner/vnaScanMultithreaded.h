@@ -25,6 +25,11 @@
 
 /*
  * Declaring global variables (for error handling and port consistency)
+ * 
+ * @fatal_error_in_progress is a flag to ensure errors during error handling do not cause infinite recursion
+ * @SERIAL_PORTS is a pointer to an array of all serial port connections
+ * @INITIAL_PORT_SETTINGS is a pointer to an array of all serial port's initial settings
+ * @VNA_COUNT is the number of VNAs currently connected
  */
 volatile sig_atomic_t fatal_error_in_progress = 0;
 int *SERIAL_PORTS = NULL;
@@ -47,15 +52,16 @@ struct datapoint_NanoVNAH {
 /*
  * Closes all ports and restores their initial settings
  * 
- * @SERIAL_PORTS
- * @INITIAL_PORT_SETTINGS
+ * We loop through the ports in reverse order to ensure that VNA_COUNT is
+ * always accurate and if a fatal error occurs a new call of close_and_reset_all()
+ * would not try to close an alread-closed port
  */
 void close_and_reset_all();
 
 /*
  * Fatal error handling. 
  * 
- * Calls close_and_reset before allowing the program to exit normally.
+ * Calls close_and_reset_all before allowing the program to exit normally.
  * 
  * @fatal_error_in_progress to prevent infinite recursion.
  */
@@ -80,14 +86,6 @@ struct termios init_serial_settings(int serial_port);
 /*
  * Coordination variables for multithreading
  */
-/*
-int count = 0;
-int in = 0;
-int out = 0;
-pthread_cond_t remove_cond = PTHREAD_COND_INITIALIZER;
-pthread_cond_t fill_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-*/
 struct coordination_args {
     int count;
     int in;
@@ -112,6 +110,7 @@ short complete = 0;
  * @start is the starting frequency
  * @stop is the stopping frequency
  * @**buffer is a pointer to an array of N pointers to arrays of 101 readings
+ * @*thread_args, a pointer to the thread coordination variables created by scan_coordinator
  */
 struct scan_producer_args {
     int serial_port;
@@ -129,7 +128,9 @@ void* scan_producer(void *args);
  * Accesses buffer according to the producer-consumer problem
  * Takes arrays of 101 readings from buffer and prints them until scans are done
  * 
- * @*args pointer to struct datapoint **buffer, an array of N pointers to arrays of 101 readings
+ * @*args pointer to struct scan_consumer_args
+ * @**buffer, a pointer to an array of N pointers to arrays of 101 readings
+ * @*thread_args, a pointer to the thread coordination variables created by scan_coordinator
  */
 struct scan_consumer_args {
     struct datapoint_NanoVNAH **buffer;
@@ -140,9 +141,14 @@ void* scan_consumer(void *args);
 /*
  * Coordinator. Creates scan_producer threads for a range of VNAs and a scan_consumer thread linked to them
  * 
- * Handles connections and settings for each VNA, and the creation of a data buffer.
+ * Handles connections and settings for each VNA, also initialising global variables for ports.
+ * Creates a buffer and a coordination_args struct to hold coordination variables for multithreading
+ * Creates a consumer thread
+ * Creates a producer thread for each VNA
+ * Waits for threads to finish
+ * Resets ports, frees memory, and exits
  * 
- * TODO
+ * TODO: Make functional for multiple VNAs
  */
 void scan_coordinator(int num_vnas, int points, int start, int stop);
 
