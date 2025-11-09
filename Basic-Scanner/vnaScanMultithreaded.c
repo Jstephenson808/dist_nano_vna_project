@@ -52,7 +52,7 @@ struct termios init_serial_settings(int serial_port) {
     tty.c_iflag &= ~(IXON | IXOFF | IXANY); // no sw flow ctrl
 
     tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); // no special handling of recieved bytes
-    tty.c_oflag &= ~OPOST; // no special handling of outgoacting as the producer to scan_consumer's consumering bytes
+    tty.c_oflag &= ~OPOST; // no special handling of outgoing bytes
     tty.c_oflag &= ~ONLCR; // no newline conversion
 
     tty.c_cc[VTIME] = 50; // timeout 5 seconds
