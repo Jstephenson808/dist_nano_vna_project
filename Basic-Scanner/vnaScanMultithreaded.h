@@ -80,12 +80,22 @@ struct termios init_serial_settings(int serial_port);
 /*
  * Coordination variables for multithreading
  */
+/*
 int count = 0;
 int in = 0;
 int out = 0;
 pthread_cond_t remove_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t fill_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+*/
+struct coordination_args {
+    int count;
+    int in;
+    int out;
+    pthread_cond_t remove_cond;
+    pthread_cond_t fill_cond;
+    pthread_mutex_t lock;
+};
 // flag for when the consumer has no more to read. Currently no support for multiple consumers.
 short complete = 0;
 
@@ -109,6 +119,7 @@ struct scan_producer_args {
     int start;
     int stop;
     struct datapoint_NanoVNAH **buffer;
+    struct coordination_args *thread_args;
 };
 void* scan_producer(void *args);
 
@@ -120,6 +131,10 @@ void* scan_producer(void *args);
  * 
  * @*args pointer to struct datapoint **buffer, an array of N pointers to arrays of 101 readings
  */
+struct scan_consumer_args {
+    struct datapoint_NanoVNAH **buffer;
+    struct coordination_args *thread_args;
+};
 void* scan_consumer(void *args);
 
 /*

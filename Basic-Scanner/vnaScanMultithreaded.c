@@ -67,13 +67,13 @@ struct termios init_serial_settings(int serial_port) {
     return initial_tty; // remember to restore later
 }
 
-void* scan_producer(void *args) {
+void* scan_producer(void *arguments) {
 
-    struct scan_producer_args *arguments = args;
+    struct scan_producer_args *args = arguments;
 
-    int total_scans = arguments->points / POINTS;
-    int step = (arguments->stop - arguments->start) / total_scans;
-    int current = arguments->start;
+    int total_scans = args->points / POINTS;
+    int step = (args->stop - args->start) / total_scans;
+    int current = args->start;
 
     int numBytes;
         
@@ -86,15 +86,15 @@ void* scan_producer(void *args) {
         // give scan command
         char* msg_buff = malloc(sizeof(char)*50);    
         snprintf(msg_buff, sizeof(char)*50, "scan %d %f %i %i\r", current, round(current + step), POINTS, MASK);
-        write(arguments->serial_port, msg_buff, sizeof(char)*50);
+        write(args->serial_port, msg_buff, sizeof(char)*50);
         free(msg_buff);
         msg_buff = NULL;
 
         // skip to binary header
-        numBytes = read(arguments->serial_port, &short_buffer, sizeof(char)*4);
+        numBytes = read(args->serial_port, &short_buffer, sizeof(char)*4);
         if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
         while (details[0] != actual_details[0] && details[1] != actual_details[1]) {
-            numBytes = read(arguments->serial_port, &advance, sizeof(char));
+            numBytes = read(args->serial_port, &advance, sizeof(char));
             if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
             for (int i = 0; i < 3; i++) {
                 short_buffer[i] = short_buffer[i+1];
@@ -109,22 +109,22 @@ void* scan_producer(void *args) {
         struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
 
         for (int i = 0; i < POINTS; i++) {
-            numBytes = read(arguments->serial_port, data+i, sizeof(struct datapoint_NanoVNAH));
+            numBytes = read(args->serial_port, data+i, sizeof(struct datapoint_NanoVNAH));
             if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
             if (numBytes != 20) {printf("(%d) malformed", i);}
         }
 
         // add to buffer
 
-        pthread_mutex_lock(&lock);
-        while (count == N) {
-            pthread_cond_wait(&remove_cond, &lock);
+        pthread_mutex_lock(&args->thread_args->lock);
+        while (args->thread_args->count == N) {
+            pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
         }
-        arguments->buffer[in] = data;
-        in = (in+1) % N;
-        count++;
-        pthread_cond_signal(&fill_cond);
-        pthread_mutex_unlock(&lock);
+        args->buffer[args->thread_args->in] = data;
+        args->thread_args->in = (args->thread_args->in+1) % N;
+        args->thread_args->count++;
+        pthread_cond_signal(&args->thread_args->fill_cond);
+        pthread_mutex_unlock(&args->thread_args->lock);
 
         // finish loop
 
@@ -135,23 +135,23 @@ void* scan_producer(void *args) {
     return NULL;
 }
 
-void* scan_consumer(void *args) {
+void* scan_consumer(void *arguments) {
 
-    struct datapoint_NanoVNAH **buffer = args;
+    struct scan_consumer_args *args = arguments;
     int total_count = 0;
 
     // warning: this outer while loop will cause infinite waiting with multiple consumer threads
-    while (complete == 0 && (count != 0)) {
-        pthread_mutex_lock(&lock);
-        while (count == 0) {
-            pthread_cond_wait(&fill_cond, &lock);
+    while (complete == 0 && (args->thread_args->count != 0)) {
+        pthread_mutex_lock(&args->thread_args->lock);
+        while (args->thread_args->count == 0) {
+            pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
         }
-        struct datapoint_NanoVNAH *data = buffer[out];
-        buffer[out] = NULL;
-        out = (out + 1) % N;
-        count--;
-        pthread_cond_signal(&remove_cond);
-        pthread_mutex_unlock(&lock);
+        struct datapoint_NanoVNAH *data = args->buffer[args->thread_args->out];
+        args->buffer[args->thread_args->out] = NULL;
+        args->thread_args->out = (args->thread_args->out + 1) % N;
+        args->thread_args->count--;
+        pthread_cond_signal(&args->thread_args->remove_cond);
+        pthread_mutex_unlock(&args->thread_args->lock);
 
         for (int i = 0; i < POINTS; i++) {
             printf("(%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", total_count, data[i].frequency, data[i].s11.re, data[i].s11.im, data[i].s21.re, data[i].s21.im);
@@ -173,9 +173,11 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
     // create consumer and producer threads
 
     struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
+    struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
 
     pthread_t consumer;
-    int error = pthread_create(&consumer, NULL, &scan_consumer, buffer);
+    struct scan_consumer_args consumer_args = {buffer,&thread_args};
+    int error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){printf("Error %i from create consumer:\n", errno);return;}
 
     // warning: needs work done before this will work properly >1 VNA
@@ -192,6 +194,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].buffer = buffer;
+        arguments[i].thread_args = &thread_args;
 
         error = pthread_create(&producers[i], NULL, &scan_producer, &arguments);
         if(error != 0){printf("Error %i from create producer: %s\n", errno, strerror(errno));return;}
