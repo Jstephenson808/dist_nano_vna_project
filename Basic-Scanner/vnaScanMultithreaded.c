@@ -1,13 +1,13 @@
 #include "vnaScanMultithreaded.h"
 
-void close_and_reset(int serial_port, struct termios* initial_tty) {
-    if (tcsetattr(serial_port, TCSANOW, initial_tty) != 0) { // restore settings
-        printf("Error %i from tcsetattr, restoring: %s\n", errno, strerror(errno));
+void close_and_reset_all() {
+    for (int i = VNA_COUNT-1; i >= 0; i--) {
+        if (tcsetattr(SERIAL_PORTS[i], TCSANOW, &INITIAL_PORT_SETTINGS[i]) != 0) { // restore settings
+            printf("Error %i from tcsetattr, restoring: %s\n", errno, strerror(errno));
+        }
+        close(SERIAL_PORTS[i]);
+        VNA_COUNT--;
     }
-    free(initial_tty);
-    initial_port_settings_global = NULL;
-    initial_tty = NULL;
-    close(serial_port);
 }
 
 void fatal_error_signal(int sig) {
@@ -16,20 +16,20 @@ void fatal_error_signal(int sig) {
     }
     fatal_error_in_progress = 1;
 
-    if (initial_port_settings_global != NULL) {
-        close_and_reset(serial_port_global, initial_port_settings_global);
-    }
+    close_and_reset_all();
+    free(INITIAL_PORT_SETTINGS);
+    free(SERIAL_PORTS);
 
     signal (sig, SIG_DFL);
     raise (sig);
 }
 
-struct termios* init_serial_settings(int serial_port) {
-    struct termios *initial_tty = malloc(sizeof(struct termios)); // keep to restore settings later
-    if (tcgetattr(serial_port, initial_tty) != 0) {
+struct termios init_serial_settings(int serial_port) {
+    struct termios initial_tty; // keep to restore settings later
+    if (tcgetattr(serial_port, &initial_tty) != 0) {
         printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
     }
-    struct termios tty = *initial_tty; // copy for editing
+    struct termios tty = initial_tty; // copy for editing
 
     tty.c_cflag &= ~PARENB; // no parity
     tty.c_cflag &= ~CSTOPB; // one stop bit
@@ -64,7 +64,6 @@ struct termios* init_serial_settings(int serial_port) {
         printf("Error %i from tcsetattr, setting: %s\n", errno, strerror(errno));
     }
 
-    initial_port_settings_global = initial_tty;
     return initial_tty; // remember to restore later
 }
 
@@ -93,10 +92,10 @@ void* scan_producer(void *args) {
 
         // skip to binary header
         numBytes = read(arguments->serial_port, &short_buffer, sizeof(char)*4);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(arguments->serial_port, initial_port_settings_global);return NULL;}
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
         while (details[0] != actual_details[0] && details[1] != actual_details[1]) {
             numBytes = read(arguments->serial_port, &advance, sizeof(char));
-            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(arguments->serial_port, initial_port_settings_global);return NULL;}
+            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
             for (int i = 0; i < 3; i++) {
                 short_buffer[i] = short_buffer[i+1];
             }
@@ -111,7 +110,7 @@ void* scan_producer(void *args) {
 
         for (int i = 0; i < POINTS; i++) {
             numBytes = read(arguments->serial_port, data+i, sizeof(struct datapoint_NanoVNAH));
-            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(arguments->serial_port, initial_port_settings_global);return NULL;}
+            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
             if (numBytes != 20) {printf("(%d) malformed", i);}
         }
 
@@ -165,8 +164,59 @@ void* scan_consumer(void *args) {
     return NULL;
 }
 
-void scan_coordinator() {
-    // TODO - implement scan_coordinator
+void scan_coordinator(int num_vnas, int points, int start, int stop) {
+    // initialise global variables
+
+    SERIAL_PORTS = calloc(num_vnas, sizeof(int));
+    INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
+
+    // create consumer and producer threads
+
+    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
+
+    pthread_t consumer;
+    int error = pthread_create(&consumer, NULL, &scan_consumer, buffer);
+    if(error != 0){printf("Error %i from create consumer:\n", errno);return;}
+
+    struct scan_producer_args arguments[num_vnas];
+    pthread_t producers[num_vnas];
+    for(int i = 0; i < num_vnas; i++) {
+        SERIAL_PORTS[i] = open("/dev/ttyACM0", O_RDWR); // will need logic to decide port
+        if (SERIAL_PORTS[i] < 0) {printf("Error %i from open: %s\n", errno, strerror(errno));}
+        INITIAL_PORT_SETTINGS[i] = init_serial_settings(SERIAL_PORTS[i]);
+        VNA_COUNT++;
+
+        arguments[i].serial_port = SERIAL_PORTS[i];
+        arguments[i].points = points;
+        arguments[i].start = start;
+        arguments[i].stop = stop;
+        arguments[i].buffer = buffer;
+
+        error = pthread_create(&producers[i], NULL, &scan_producer, &arguments);
+        if(error != 0){printf("Error %i from create producer: %s\n", errno, strerror(errno));return;}
+    }
+
+    // wait for threads to finish
+
+    for(int i = 0; i < num_vnas; i++) {
+        error = pthread_join(producers[i], NULL);
+        if(error != 0){printf("Error %i from join producer:\n", errno);return;}
+    }
+
+    error = pthread_join(consumer,NULL);
+    if(error != 0){printf("Error %i from join consumer:\n", errno);return;}
+
+    // finish up
+    free(buffer);
+    buffer = NULL;
+
+    close_and_reset_all();
+    free(SERIAL_PORTS);
+    SERIAL_PORTS = NULL;
+    free(INITIAL_PORT_SETTINGS);
+    INITIAL_PORT_SETTINGS = NULL;
+
+    return;
 }
 
 /*
@@ -181,7 +231,7 @@ int checkConnection(int serial_port) {
 
     do {
         numBytes = read(serial_port,&buffer,sizeof(char)*31);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));close_and_reset(serial_port, initial_port_settings_global);return 1;}
+        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return 1;}
         buffer[numBytes] = '\0';
         printf("%s", (unsigned char*)buffer);
     } while (numBytes > 0 && !strstr(buffer,"ch>"));
@@ -200,62 +250,25 @@ int checkConnection(int serial_port) {
  */
 int main() {
 
-    struct timeval stop, start;
-    gettimeofday(&start, NULL);
-
     // assign error handler
-
     if (signal(SIGINT, fatal_error_signal) == SIG_ERR) {
         fprintf(stderr, "An error occurred while setting a signal handler.\n");
         return EXIT_FAILURE;
     }
 
-    // create port
+    // start timing
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
 
-    int serial_port = open("/dev/ttyACM0", O_RDWR);
-    if (serial_port < 0) {
-        printf("Error %i from open: %s\n", errno, strerror(errno));
-        fflush(stdout);
-    }
+    // call a scan (with one nanoVNA)
+    int points = 10100;
+    scan_coordinator(1,points,50000000,900000000);
 
-    struct termios* initial_tty = init_serial_settings(serial_port);
-    serial_port_global = serial_port;
-
-    // create threads
-
-    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
-
-    struct scan_producer_args arguments;
-    arguments.serial_port = serial_port;
-    arguments.points = 10100;
-    arguments.start = 50000000;
-    arguments.stop = 900000000;
-    arguments.buffer = buffer;
-
-    pthread_t producer;
-    int error = pthread_create(&producer, NULL, &scan_producer, &arguments);
-    if(error != 0){printf("Error %i from create producer: %s\n", errno, strerror(errno));return 1;}
-
-    pthread_t consumer;
-    error = pthread_create(&consumer, NULL, &scan_consumer,buffer);
-    if(error != 0){printf("Error %i from create consumer:\n", errno);return 1;}
-
-    error = pthread_join(producer, NULL);
-    if(error != 0){printf("Error %i from join producer:\n", errno);return 1;}
-
-    error = pthread_join(consumer,NULL);
-    if(error != 0){printf("Error %i from join consumer:\n", errno);return 1;}
-
-    // finish up
-    free(buffer);
-    buffer = NULL;
-    close_and_reset(serial_port, initial_tty);
-    initial_tty = NULL;
-
+    // finish timing
     gettimeofday(&stop, NULL);
     printf("---\ntook %lf s\n", (double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000);
-    printf("%lfs per point measurement \n", ((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000)/(double)arguments.points);
-    printf("%lfs points per second \n", ((double)arguments.points)/((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000));
+    printf("%lfs per point measurement \n", ((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000)/(double)points);
+    printf("%lfs points per second \n", ((double)points)/((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000));
 
     return 0;
 }

@@ -24,11 +24,12 @@
 #define N 100
 
 /*
- * Declaring global variables (for error handling only)
+ * Declaring global variables (for error handling and port consistency)
  */
 volatile sig_atomic_t fatal_error_in_progress = 0;
-int serial_port_global = 0;
-struct termios* initial_port_settings_global = NULL;
+int *SERIAL_PORTS = NULL;
+struct termios* INITIAL_PORT_SETTINGS = NULL;
+int VNA_COUNT = 0;
 
 /*
  * Declaring structs for data points
@@ -44,12 +45,12 @@ struct datapoint_NanoVNAH {
 };
 
 /*
- * Closes a port and restores its initial settings
+ * Closes all ports and restores their initial settings
  * 
- * @serial_port is the port to be closed
- * @initial_tty is the initial settings of the port, to be restored
+ * @SERIAL_PORTS
+ * @INITIAL_PORT_SETTINGS
  */
-void close_and_reset(int serial_port, struct termios* initial_tty);
+void close_and_reset_all();
 
 /*
  * Fatal error handling. 
@@ -70,7 +71,7 @@ void fatal_error_signal(int sig);
  * @serial_port should already be opened successfully
  * @return initial settings to restore. Also stored in global variable.
  */
-struct termios* init_serial_settings(int serial_port);
+struct termios init_serial_settings(int serial_port);
 
 //------------------------
 // SCAN LOGIC
@@ -127,6 +128,6 @@ void* scan_consumer(void *args);
  * 
  * TODO
  */
-void scan_coordinator();
+void scan_coordinator(int num_vnas, int points, int start, int stop);
 
 #endif
