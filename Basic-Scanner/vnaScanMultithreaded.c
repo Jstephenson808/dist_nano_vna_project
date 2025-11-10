@@ -69,7 +69,7 @@ struct termios init_serial_settings(int serial_port) {
 
 void* scan_producer(void *arguments) {
 
-    struct scan_producer_args *args = arguments;
+    struct scan_producer_args *args = (struct scan_producer_args*)arguments;
 
     int total_scans = args->points / POINTS;
     int step = (args->stop - args->start) / total_scans;
@@ -137,11 +137,11 @@ void* scan_producer(void *arguments) {
 
 void* scan_consumer(void *arguments) {
 
-    struct scan_consumer_args *args = arguments;
+    struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
 
     // warning: this outer while loop will cause infinite waiting with multiple consumer threads
-    while (complete == 0 && (args->thread_args->count != 0)) {
+    while (complete == 0 || (args->thread_args->count != 0)) {
         pthread_mutex_lock(&args->thread_args->lock);
         while (args->thread_args->count == 0) {
             pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
