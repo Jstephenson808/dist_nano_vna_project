@@ -1,5 +1,6 @@
 #include "vnaScanMultithreaded.h"
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
+volatile int complete = 0; 
 
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {

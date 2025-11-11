@@ -150,7 +150,7 @@ struct coordination_args {
     pthread_mutex_t lock;
 };
 // flag for when the consumer has no more to read. Currently no support for multiple consumers.
-short complete = 0;
+extern volatile int complete;
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
