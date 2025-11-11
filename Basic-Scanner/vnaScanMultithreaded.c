@@ -1,38 +1,6 @@
 #include "vnaScanMultithreaded.h"
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 
-/**
- * Restores serial port to original settings
- * 
- * @param fd The file descriptor of the serial port
- * @param settings The original termios settings to restore
- */
-void restore_serial(int fd, const struct termios *settings) {
-    if (tcsetattr(fd, TCSANOW, settings) != 0) {
-        fprintf(stderr, "Error %i restoring settings for fd %d: %s\n", 
-                errno, fd, strerror(errno));
-    }
-}
-
-/**
- * Closes all serial ports and restores their initial settings
- * Loops through ports in reverse order to maintain VNA_COUNT accuracy
- */
-void close_and_reset_all() {
-    for (int i = VNA_COUNT-1; i >= 0; i--) {
-        // Restore original settings before closing
-        restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
-        
-        // Close the serial port
-        if (close(SERIAL_PORTS[i]) != 0) {
-            fprintf(stderr, "Error %i closing port %d: %s\n", 
-                    errno, i, strerror(errno));
-        }
-        
-        VNA_COUNT--;
-    }
-}
-
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
         raise (sig);
@@ -127,6 +95,38 @@ struct termios configure_serial(int serial_port) {
     }
 
     return initial_tty; // Return original settings for restoration
+}
+
+/**
+ * Restores serial port to original settings
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param settings The original termios settings to restore
+ */
+void restore_serial(int fd, const struct termios *settings) {
+    if (tcsetattr(fd, TCSANOW, settings) != 0) {
+        fprintf(stderr, "Error %i restoring settings for fd %d: %s\n", 
+                errno, fd, strerror(errno));
+    }
+}
+
+/**
+ * Closes all serial ports and restores their initial settings
+ * Loops through ports in reverse order to maintain VNA_COUNT accuracy
+ */
+void close_and_reset_all() {
+    for (int i = VNA_COUNT-1; i >= 0; i--) {
+        // Restore original settings before closing
+        restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
+        
+        // Close the serial port
+        if (close(SERIAL_PORTS[i]) != 0) {
+            fprintf(stderr, "Error %i closing port %d: %s\n", 
+                    errno, i, strerror(errno));
+        }
+        
+        VNA_COUNT--;
+    }
 }
 
 /**
