@@ -465,7 +465,45 @@ int test_connection(int serial_port) {
  * read and scans one byte at a time to match binary header pattern.
  * Scanning is done with larger buffers at all other points, as 1 byte buffers are inefficient.
  */
-int main() {
+int main(int argc, char *argv[]) {
+    // defaults
+    long start_freq = 50000000;
+    long stop_freq = 900000000;
+    int nbr_points = 10100;
+    int nbr_nanoVNAs = 1;
+    int nbr_sweeps = 1;
+
+    
+
+    if (argc > 1) {
+        if (argc != 6) {
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_points> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
+            fprintf(stderr, "Example: %s 50000000 900000000 10100 1 1\n", argv[0]);
+            fprintf(stderr, "Run without arguments for default scan\n");
+            return EXIT_FAILURE;
+        }
+
+        start_freq = atol(argv[1]);
+        stop_freq = atol(argv[2]);
+        nbr_points = atoi(argv[3]);
+        nbr_nanoVNAs = atoi(argv[4]);
+        nbr_sweeps = atoi(argv[5]);
+
+        // Validation of arguments
+        if (start_freq <= 0 || stop_freq <= 0 || nbr_points <= 0 || 
+            nbr_nanoVNAs <= 0 || nbr_sweeps <= 0) {
+            fprintf(stderr, "Error: All arguments must be positive numbers\n");
+            return EXIT_FAILURE;
+        }
+        
+        if (start_freq >= stop_freq) {
+            fprintf(stderr, "Error: start_freq must be less than stop_freq\n");
+            return EXIT_FAILURE;
+        }
+    } else {
+        printf("Running default scan: %ld Hz to %ld Hz, %d points, %d VNA(s), %d sweep(s)\n",
+               start_freq, stop_freq, nbr_points, nbr_nanoVNAs, nbr_sweeps);
+    }
 
     // assign error handler
     if (signal(SIGINT, fatal_error_signal) == SIG_ERR) {
@@ -478,14 +516,23 @@ int main() {
     gettimeofday(&start, NULL);
 
     // call a scan (with one nanoVNA)
-    int points = 10100;
-    run_multithreaded_scan(1,points,50000000,900000000);
+    for (int sweep = 0; sweep < nbr_sweeps; sweep++) {
+        if (nbr_sweeps > 1) {
+            printf("=== Sweep %d of %d ===\n", sweep + 1, nbr_sweeps);
+        }
+        run_multithreaded_scan(nbr_nanoVNAs, nbr_points, start_freq, stop_freq);
+    }
+    
 
     // finish timing
     gettimeofday(&stop, NULL);
-    printf("---\ntook %lf s\n", (double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000);
-    printf("%lfs per point measurement \n", ((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000)/(double)points);
-    printf("%lfs points per second \n", ((double)points)/((double)(stop.tv_sec - start.tv_sec) + (double)(stop.tv_usec - start.tv_usec) / (double)1000000));
+    double elapsed = (double)(stop.tv_sec - start.tv_sec) + 
+                     (double)(stop.tv_usec - start.tv_usec) / 1000000.0;
+    
+    int total_points = nbr_points * nbr_sweeps;
+    printf("---\ntook %.6f s\n", elapsed);
+    printf("%.6f s per point measurement\n", elapsed / total_points);
+    printf("%.2f points per second\n", total_points / elapsed);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
