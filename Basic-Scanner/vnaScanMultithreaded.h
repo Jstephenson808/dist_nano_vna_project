@@ -54,7 +54,7 @@ struct datapoint_NanoVNAH {
  * 
  * We loop through the ports in reverse order to ensure that VNA_COUNT is
  * always accurate and if a fatal error occurs a new call of close_and_reset_all()
- * would not try to close an already-closed port
+ * would not try to close an alread-closed port
  */
 void close_and_reset_all();
 
