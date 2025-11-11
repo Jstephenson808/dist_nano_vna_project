@@ -23,20 +23,18 @@
 #define MASK 135
 #define N 100
 
-/*
+/**
  * Declaring global variables (for error handling and port consistency)
  * 
- * @fatal_error_in_progress is a flag to ensure errors during error handling do not cause infinite recursion
  * @SERIAL_PORTS is a pointer to an array of all serial port connections
  * @INITIAL_PORT_SETTINGS is a pointer to an array of all serial port's initial settings
  * @VNA_COUNT is the number of VNAs currently connected
  */
-volatile sig_atomic_t fatal_error_in_progress = 0;
 int *SERIAL_PORTS = NULL;
 struct termios* INITIAL_PORT_SETTINGS = NULL;
 int VNA_COUNT = 0;
 
-/*
+/**
  * Declaring structs for data points
  */
 struct complex {
@@ -49,7 +47,7 @@ struct datapoint_NanoVNAH {
     struct complex s21;
 };
 
-/*
+/**
  * Closes all ports and restores their initial settings
  * 
  * We loop through the ports in reverse order to ensure that VNA_COUNT is
@@ -58,7 +56,15 @@ struct datapoint_NanoVNAH {
  */
 void close_and_reset_all();
 
-/*
+/**
+ * Restores serial port to original settings
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param settings The original termios settings to restore
+ */
+void restore_serial(int fd, const struct termios *settings);
+
+/**
  * Opens a serial port
  * 
  * @param port The device path (e.g., "/dev/ttyACM0")
@@ -66,7 +72,7 @@ void close_and_reset_all();
  */
 int open_serial(const char *port);
 
-/*
+/**
  * Initialise port settings
  * 
  * Edits port settings to interact with a serial interface.
@@ -74,12 +80,12 @@ int open_serial(const char *port);
  * Flags should only be edited with bitwise operations.
  * Writes are permanent: initial settings are kept to restore on program close.
  * 
- * @param serial_port should already be opened successfully
- * @return initial settings to restore. Also stored in global variable.
+ * @param serial_port File descriptor of an already opened serial port
+ * @return Original termios settings to restore later
  */
-struct termios init_serial_settings(int serial_port);
+struct termios configure_serial(int serial_port);
 
-/*
+/**
  * Writes a command to the serial port with error checking
  * 
  * @param fd The file descriptor of the serial port
@@ -88,13 +94,43 @@ struct termios init_serial_settings(int serial_port);
  */
 ssize_t write_command(int fd, const char *cmd);
 
-/*
+/**
+ * Reads exact number of bytes from serial port
+ * Handles partial reads by continuing until all bytes are received
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param buffer The buffer to read data into
+ * @param length The number of bytes to read
+ * @return Number of bytes read on success, -1 on error, 0 on timeout
+ */
+ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
+
+/**
+ * Finds the binary header in the serial stream
+ * Scans byte-by-byte looking for the header pattern (mask + points)
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param expected_mask The expected mask value (e.g., 135)
+ * @param expected_points The expected points value (e.g., 101)
+ * @return 1 if header found, 0 if timeout/not found, -1 on error
+ */
+int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points);
+
+/**
+ * Tests connection to NanoVNA by issuing info command
+ * Sends "info" command and prints the response
+ * 
+ * @param serial_port The file descriptor of the serial port
+ * @return 0 on success, 1 on error
+ */
+int test_connection(int serial_port);
+
+/**
  * Fatal error handling. 
  * 
  * Calls close_and_reset_all before allowing the program to exit normally.
  * 
  * @param sig The signal number
- * @fatal_error_in_progress to prevent infinite recursion.
  */
 void fatal_error_signal(int sig);
 
@@ -102,7 +138,7 @@ void fatal_error_signal(int sig);
 // SCAN LOGIC
 //------------------------
 
-/*
+/**
  * Coordination variables for multithreading
  */
 struct coordination_args {
@@ -116,20 +152,14 @@ struct coordination_args {
 // flag for when the consumer has no more to read. Currently no support for multiple consumers.
 short complete = 0;
 
-/*
+/**
  * A thread function to take scans from a NanoVNA onto buffer
  *
  * Accesses buffer according to the producer-consumer problem
  * Computes step (frequency distance between scans) from start stop and points,
  * then pulls scans from NanoVNA in increments of 101 points and appends to buffer.
  * 
- * @*args pointer to scan_producer_args struct used to pass arguments into this function
- * @serial_port is the port to take a reading from
- * @points is the number of readings to take
- * @start is the starting frequency
- * @stop is the stopping frequency
- * @**buffer is a pointer to an array of N pointers to arrays of 101 readings
- * @*thread_args, a pointer to the thread coordination variables created by scan_coordinator
+ * @param args pointer to scan_producer_args struct used to pass arguments into this function
  */
 struct scan_producer_args {
     int serial_port;
@@ -141,15 +171,13 @@ struct scan_producer_args {
 };
 void* scan_producer(void *args);
 
-/*
+/**
  * A thread function to print scans from buffer
  * 
  * Accesses buffer according to the producer-consumer problem
  * Takes arrays of 101 readings from buffer and prints them until scans are done
  * 
- * @*args pointer to struct scan_consumer_args
- * @**buffer, a pointer to an array of N pointers to arrays of 101 readings
- * @*thread_args, a pointer to the thread coordination variables created by scan_coordinator
+ * @param args pointer to struct scan_consumer_args
  */
 struct scan_consumer_args {
     struct datapoint_NanoVNAH **buffer;
@@ -157,8 +185,8 @@ struct scan_consumer_args {
 };
 void* scan_consumer(void *args);
 
-/*
- * Coordinator. Creates scan_producer threads for a range of VNAs and a scan_consumer thread linked to them
+/**
+ * Orchestrates multithreaded VNA scanning
  * 
  * Handles connections and settings for each VNA, also initialising global variables for ports.
  * Creates a buffer and a coordination_args struct to hold coordination variables for multithreading
@@ -167,8 +195,13 @@ void* scan_consumer(void *args);
  * Waits for threads to finish
  * Resets ports, frees memory, and exits
  * 
+ * @param num_vnas Number of VNAs to scan with
+ * @param points Total number of data points to collect
+ * @param start Starting frequency in Hz
+ * @param stop Stopping frequency in Hz
+ * 
  * TODO: Make functional for multiple VNAs
  */
-void scan_coordinator(int num_vnas, int points, int start, int stop);
+void run_multithreaded_scan(int num_vnas, int points, int start, int stop);
 
 #endif

@@ -1,4 +1,18 @@
 #include "vnaScanMultithreaded.h"
+static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
+
+/**
+ * Restores serial port to original settings
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param settings The original termios settings to restore
+ */
+void restore_serial(int fd, const struct termios *settings) {
+    if (tcsetattr(fd, TCSANOW, settings) != 0) {
+        fprintf(stderr, "Error %i restoring settings for fd %d: %s\n", 
+                errno, fd, strerror(errno));
+    }
+}
 
 /**
  * Closes all serial ports and restores their initial settings
@@ -7,10 +21,7 @@
 void close_and_reset_all() {
     for (int i = VNA_COUNT-1; i >= 0; i--) {
         // Restore original settings before closing
-        if (tcsetattr(SERIAL_PORTS[i], TCSANOW, &INITIAL_PORT_SETTINGS[i]) != 0) {
-            fprintf(stderr, "Error %i restoring settings for port %d: %s\n", 
-                    errno, i, strerror(errno));
-        }
+        restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
         
         // Close the serial port
         if (close(SERIAL_PORTS[i]) != 0) {
@@ -59,9 +70,9 @@ int open_serial(const char *port) {
  * Saves original settings for later restoration
  * 
  * @param serial_port The file descriptor of the open serial port
- * @return The oiginal terrmios settings to restore later
+ * @return The original termios settings to restore later
  */
-struct termios init_serial_settings(int serial_port) {
+struct termios configure_serial(int serial_port) {
     struct termios initial_tty; // keep to restore settings later
     if (tcgetattr(serial_port, &initial_tty) != 0) {
         fprintf(stderr, "Error %i from tcgetattr: %s\n", errno, strerror(errno));
@@ -140,6 +151,97 @@ ssize_t write_command(int fd, const char *cmd) {
     return bytes_written;
 }
 
+/**
+ * Reads exact number of bytes from serial port
+ * Handles partial reads by continuing until all bytes are received
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param buffer The buffer to read data into
+ * @param length The number of bytes to read
+ * @return Number of bytes read on success, -1 on error, 0 on timeout
+ */
+ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
+    ssize_t bytes_read = 0;
+    
+    while (bytes_read < (ssize_t)length) {
+        ssize_t n = read(fd, buffer + bytes_read, length - bytes_read);
+        
+        if (n < 0) {
+            fprintf(stderr, "Error reading from fd %d: %s\n", fd, strerror(errno));
+            return -1;
+        } else if (n == 0) {
+            // Timeout or end of file
+            if (bytes_read > 0) {
+                fprintf(stderr, "Timeout: only read %zd of %zu bytes from fd %d\n", 
+                        bytes_read, length, fd);
+            }
+            return bytes_read;
+        }
+        
+        bytes_read += n;
+    }
+    
+    return bytes_read;
+}
+
+/**
+ * Finds the binary header in the serial stream
+ * Scans byte-by-byte looking for the header pattern (mask + points)
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param expected_mask The expected mask value (e.g., 135)
+ * @param expected_points The expected points value (e.g., 101)
+ * @return 1 if header found, 0 if timeout/not found, -1 on error
+ */
+int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points) {
+    uint8_t window[4] = {0};
+    int max_bytes = 500;  // Maximum bytes to scan before giving up
+    
+    // Read initial 4 bytes
+    if (read_exact(fd, window, 4) != 4) {
+        fprintf(stderr, "Failed to read initial header bytes\n");
+        return -1;
+    }
+    
+    // Check if we already have the header
+    uint16_t mask = window[0] | (window[1] << 8);
+    uint16_t points = window[2] | (window[3] << 8);
+    if (mask == expected_mask && points == expected_points) {
+        return 1;
+    }
+    
+    // Scan through the stream byte by byte
+    for (int i = 4; i < max_bytes; i++) {
+        uint8_t byte;
+        ssize_t n = read(fd, &byte, 1);
+        
+        if (n < 0) {
+            fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
+            return -1;
+        } else if (n == 0) {
+            fprintf(stderr, "Timeout waiting for binary header\n");
+            return 0;
+        }
+        
+        // Shift window
+        window[0] = window[1];
+        window[1] = window[2];
+        window[2] = window[3];
+        window[3] = byte;
+        
+        // Check for header match
+        mask = window[0] | (window[1] << 8);
+        points = window[2] | (window[3] << 8);
+        
+        if (mask == expected_mask && points == expected_points) {
+            return 1;  // Found header
+        }
+    }
+    
+    fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
+    return 0;
+}
+
 void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
@@ -148,15 +250,9 @@ void* scan_producer(void *arguments) {
     int step = (args->stop - args->start) / total_scans;
     int current = args->start;
 
-    int numBytes;
-        
-    uint16_t details[2], actual_details[2] = {MASK, POINTS};
-    unsigned char short_buffer[4];
-    unsigned char advance;
-
     while (total_scans > 0) {
 
-        // give scan command
+        // Send scan command
         char msg_buff[50];
         snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
                  current, (int)round(current + step), POINTS, MASK);
@@ -166,28 +262,30 @@ void* scan_producer(void *arguments) {
             return NULL;
         }
 
-        // skip to binary header
-        numBytes = read(args->serial_port, &short_buffer, sizeof(char)*4);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
-        while (details[0] != actual_details[0] && details[1] != actual_details[1]) {
-            numBytes = read(args->serial_port, &advance, sizeof(char));
-            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
-            for (int i = 0; i < 3; i++) {
-                short_buffer[i] = short_buffer[i+1];
-            }
-            short_buffer[3] = advance;
-            details[0] = (((short_buffer[1] << 8) & 0xFF00) | (short_buffer[0] & 0xFF));
-            details[1] = (((short_buffer[3] << 8) & 0xFF00) | (short_buffer[2] & 0xFF));
+        // Find binary header in response
+        int header_found = find_binary_header(args->serial_port, MASK, POINTS);
+        if (header_found != 1) {
+            fprintf(stderr, "Failed to find binary header\n");
+            return NULL;
         }
 
-        // recieve output
-
+        // Receive data points
         struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
+        if (!data) {
+            fprintf(stderr, "Failed to allocate memory for data points\n");
+            return NULL;
+        }
 
         for (int i = 0; i < POINTS; i++) {
-            numBytes = read(args->serial_port, data+i, sizeof(struct datapoint_NanoVNAH));
-            if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return NULL;}
-            if (numBytes != 20) {printf("(%d) malformed", i);}
+            ssize_t bytes_read = read_exact(args->serial_port, 
+                                           (uint8_t*)(data + i), 
+                                           sizeof(struct datapoint_NanoVNAH));
+            if (bytes_read != sizeof(struct datapoint_NanoVNAH)) {
+                fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
+                        i, bytes_read, sizeof(struct datapoint_NanoVNAH));
+                free(data);
+                return NULL;
+            }
         }
 
         // add to buffer
@@ -240,7 +338,7 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-void scan_coordinator(int num_vnas, int points, int start, int stop) {
+void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
     // Initialise global variables
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
@@ -282,7 +380,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
             fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
             // Clean up already opened ports
             for (int j = 0; j < i; j++) {
-                tcsetattr(SERIAL_PORTS[j], TCSANOW, &INITIAL_PORT_SETTINGS[j]);
+                restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
                 close(SERIAL_PORTS[j]);
             }
             free(buffer);
@@ -292,7 +390,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
         }
         
         // Configure serial port and save original settings
-        INITIAL_PORT_SETTINGS[i] = init_serial_settings(SERIAL_PORTS[i]);
+        INITIAL_PORT_SETTINGS[i] = configure_serial(SERIAL_PORTS[i]);
         VNA_COUNT++;
 
         arguments[i].serial_port = SERIAL_PORTS[i];
@@ -338,7 +436,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
  * @param serial_port The file descriptor of the serial port
  * @return 0 on success, 1 on error
  */
-int checkConnection(int serial_port) {
+int test_connection(int serial_port) {
     int numBytes;
     char buffer[32];
 
@@ -381,7 +479,7 @@ int main() {
 
     // call a scan (with one nanoVNA)
     int points = 10100;
-    scan_coordinator(1,points,50000000,900000000);
+    run_multithreaded_scan(1,points,50000000,900000000);
 
     // finish timing
     gettimeofday(&stop, NULL);
