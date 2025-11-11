@@ -59,7 +59,7 @@ int open_serial(const char *port) {
  * Saves original settings for later restoration
  * 
  * @param serial_port The file descriptor of the open serial port
- * @return The original termios settings to restore later
+ * @return The oiginal terrmios settings to restore later
  */
 struct termios init_serial_settings(int serial_port) {
     struct termios initial_tty; // keep to restore settings later
@@ -156,7 +156,7 @@ void* scan_producer(void *arguments) {
 
     while (total_scans > 0) {
 
-        // Give scan command
+        // give scan command
         char msg_buff[50];
         snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
                  current, (int)round(current + step), POINTS, MASK);
@@ -272,7 +272,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
         return;
     }
 
-    // Warning: needs work done before this will work properly >1 VNA
+    // warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
     for(int i = 0; i < num_vnas; i++) {
@@ -332,7 +332,7 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
     return;
 }
 
-/*
+/**
  * Helper function. Issues info command and prints output
  * 
  * @param serial_port The file descriptor of the serial port
