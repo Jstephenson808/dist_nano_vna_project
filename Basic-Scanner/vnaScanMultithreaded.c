@@ -1,11 +1,23 @@
 #include "vnaScanMultithreaded.h"
 
+/**
+ * Closes all serial ports and restores their initial settings
+ * Loops through ports in reverse order to maintain VNA_COUNT accuracy
+ */
 void close_and_reset_all() {
     for (int i = VNA_COUNT-1; i >= 0; i--) {
-        if (tcsetattr(SERIAL_PORTS[i], TCSANOW, &INITIAL_PORT_SETTINGS[i]) != 0) { // restore settings
-            printf("Error %i from tcsetattr, restoring: %s\n", errno, strerror(errno));
+        // Restore original settings before closing
+        if (tcsetattr(SERIAL_PORTS[i], TCSANOW, &INITIAL_PORT_SETTINGS[i]) != 0) {
+            fprintf(stderr, "Error %i restoring settings for port %d: %s\n", 
+                    errno, i, strerror(errno));
         }
-        close(SERIAL_PORTS[i]);
+        
+        // Close the serial port
+        if (close(SERIAL_PORTS[i]) != 0) {
+            fprintf(stderr, "Error %i closing port %d: %s\n", 
+                    errno, i, strerror(errno));
+        }
+        
         VNA_COUNT--;
     }
 }
@@ -24,47 +36,108 @@ void fatal_error_signal(int sig) {
     raise (sig);
 }
 
+/**
+ * Opens a serial port
+ * 
+ * @param port The device path (e.g., "/dev/ttyACM0")
+ * @return File descriptor on success, -1 on failure
+ */
+int open_serial(const char *port) {
+    int fd = open(port, O_RDWR | O_NOCTTY);
+    
+    if (fd < 0) {
+        fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
+        return -1;
+    }
+    return fd;
+}
+
+/**
+ * Configures serial port settings for NanoVNA communication
+ * 
+ * Sets up 115200 baud, 8N1, raw mode, no flow control
+ * Saves original settings for later restoration
+ * 
+ * @param serial_port The file descriptor of the open serial port
+ * @return The original termios settings to restore later
+ */
 struct termios init_serial_settings(int serial_port) {
     struct termios initial_tty; // keep to restore settings later
     if (tcgetattr(serial_port, &initial_tty) != 0) {
-        printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
+        fprintf(stderr, "Error %i from tcgetattr: %s\n", errno, strerror(errno));
     }
     struct termios tty = initial_tty; // copy for editing
 
-    tty.c_cflag &= ~PARENB; // no parity
-    tty.c_cflag &= ~CSTOPB; // one stop bit
+    // Configure baud rate (115200)
+    cfsetispeed(&tty, B115200);  // Input speed
+    cfsetospeed(&tty, B115200);  // Output speed
 
-    tty.c_cflag &= ~CSIZE; // clear size bits
-    tty.c_cflag |= CS8; // 8 bit
+    // Configure 8N1 (8 data bits, no parity, 1 stop bit)
+    tty.c_cflag &= ~PARENB;  // Clear parity bit (no parity)
+    tty.c_cflag &= ~CSTOPB;  // Clear stop bit (1 stop bit)
+    tty.c_cflag &= ~CSIZE;   // Clear data size bits
+    tty.c_cflag |= CS8;      // Set 8 data bits
 
-    tty.c_cflag &= ~CRTSCTS; // no hw flow control
-    tty.c_cflag |= CLOCAL; // ignore control lines
+    // Disable hardware flow control
+    #ifdef CRTSCTS
+    tty.c_cflag &= ~CRTSCTS;
+    #elif defined(CNEW_RTSCTS)
+    tty.c_cflag &= ~CNEW_RTSCTS;
+    #endif
 
-    tty.c_cflag |= CREAD; // turn on READ
+    tty.c_cflag |= CREAD | CLOCAL;  // Turn on READ & ignore modem control lines
 
-    tty.c_lflag &= ~ICANON; // disable canonical mode
-    tty.c_lflag &= ~ECHO; // Disable echo
-    tty.c_lflag &= ~ECHOE; // Disable erasure
-    tty.c_lflag &= ~ECHONL; // Disable new-line echo
+    // Set RAW mode (binary communication, no line processing)
+    tty.c_lflag &= ~ICANON;  // Disable canonical mode (line-by-line)
+    tty.c_lflag &= ~ECHO;    // Disable echo
+    tty.c_lflag &= ~ECHOE;   // Disable erasure
+    tty.c_lflag &= ~ECHONL;  // Disable new-line echo
+    tty.c_lflag &= ~ISIG;    // Disable interpretation of INTR, QUIT and SUSP
 
-    tty.c_lflag &= ~ISIG; // no signal chars
+    // Disable software flow control
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    
+    // Disable special handling of received bytes
+    tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+    
+    // Prevent special interpretation of output bytes
+    tty.c_oflag &= ~OPOST;  // Disable output processing
+    tty.c_oflag &= ~ONLCR;  // Prevent conversion of newline to carriage return/line feed
 
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY); // no sw flow ctrl
+    // Set timeout configuration
+    // VMIN = 0, VTIME > 0: Timeout with no minimum bytes
+    // Read returns when data arrives or timeout expires
+    tty.c_cc[VMIN] = 0;   // Read doesn't block (return immediately with available data)
+    tty.c_cc[VTIME] = 10; // 1 second timeout (tenths of a second)
 
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); // no special handling of recieved bytes
-    tty.c_oflag &= ~OPOST; // no special handling of outgoing bytes
-    tty.c_oflag &= ~ONLCR; // no newline conversion
-
-    tty.c_cc[VTIME] = 50; // timeout 5 seconds
-    tty.c_cc[VMIN] = 20; // minimum recieved 20 bytes
-
-    cfsetspeed(&tty, B115200); // baud rate 115200
-
-    if (tcsetattr(serial_port, TCSANOW, &tty) != 0) { // save settings
-        printf("Error %i from tcsetattr, setting: %s\n", errno, strerror(errno));
+    // Apply settings
+    if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
+        fprintf(stderr, "Error %i from tcsetattr: %s\n", errno, strerror(errno));
     }
 
-    return initial_tty; // remember to restore later
+    return initial_tty; // Return original settings for restoration
+}
+
+/**
+ * Writes a command to the serial port with error checking
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param cmd The command string to send (should include \r terminator)
+ * @return Number of bytes written on success, -1 on error
+ */
+ssize_t write_command(int fd, const char *cmd) {
+    size_t cmd_len = strlen(cmd);
+    ssize_t bytes_written = write(fd, cmd, cmd_len);
+    
+    if (bytes_written < 0) {
+        fprintf(stderr, "Error writing to fd %d: %s\n", fd, strerror(errno));
+        return -1;
+    } else if (bytes_written < (ssize_t)cmd_len) {
+        fprintf(stderr, "Warning: Partial write (%zd of %zu bytes) on fd %d\n", 
+                bytes_written, cmd_len, fd);
+    }
+    
+    return bytes_written;
 }
 
 void* scan_producer(void *arguments) {
@@ -83,12 +156,15 @@ void* scan_producer(void *arguments) {
 
     while (total_scans > 0) {
 
-        // give scan command
-        char* msg_buff = malloc(sizeof(char)*50);    
-        snprintf(msg_buff, sizeof(char)*50, "scan %d %f %i %i\r", current, round(current + step), POINTS, MASK);
-        write(args->serial_port, msg_buff, sizeof(char)*50);
-        free(msg_buff);
-        msg_buff = NULL;
+        // Give scan command
+        char msg_buff[50];
+        snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
+                 current, (int)round(current + step), POINTS, MASK);
+        
+        if (write_command(args->serial_port, msg_buff) < 0) {
+            fprintf(stderr, "Failed to send scan command\n");
+            return NULL;
+        }
 
         // skip to binary header
         numBytes = read(args->serial_port, &short_buffer, sizeof(char)*4);
@@ -165,27 +241,57 @@ void* scan_consumer(void *arguments) {
 }
 
 void scan_coordinator(int num_vnas, int points, int start, int stop) {
-    // initialise global variables
-
+    // Initialise global variables
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
+    
+    if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
+        fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
+        return;
+    }
 
-    // create consumer and producer threads
-
+    // Create consumer and producer threads
     struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate buffer memory\n");
+        free(SERIAL_PORTS);
+        free(INITIAL_PORT_SETTINGS);
+        return;
+    }
+    
     struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
 
     pthread_t consumer;
     struct scan_consumer_args consumer_args = {buffer,&thread_args};
     int error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
-    if(error != 0){printf("Error %i from create consumer:\n", errno);return;}
+    if(error != 0){
+        fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
+        free(buffer);
+        free(SERIAL_PORTS);
+        free(INITIAL_PORT_SETTINGS);
+        return;
+    }
 
-    // warning: needs work done before this will work properly >1 VNA
+    // Warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
     for(int i = 0; i < num_vnas; i++) {
-        SERIAL_PORTS[i] = open("/dev/ttyACM0", O_RDWR); // will need logic to decide port
-        if (SERIAL_PORTS[i] < 0) {printf("Error %i from open: %s\n", errno, strerror(errno));}
+        // Open serial port with error checking
+        SERIAL_PORTS[i] = open_serial("/dev/ttyACM0"); // Will need logic to decide port
+        if (SERIAL_PORTS[i] < 0) {
+            fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
+            // Clean up already opened ports
+            for (int j = 0; j < i; j++) {
+                tcsetattr(SERIAL_PORTS[j], TCSANOW, &INITIAL_PORT_SETTINGS[j]);
+                close(SERIAL_PORTS[j]);
+            }
+            free(buffer);
+            free(SERIAL_PORTS);
+            free(INITIAL_PORT_SETTINGS);
+            return;
+        }
+        
+        // Configure serial port and save original settings
         INITIAL_PORT_SETTINGS[i] = init_serial_settings(SERIAL_PORTS[i]);
         VNA_COUNT++;
 
@@ -196,8 +302,11 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
         arguments[i].buffer = buffer;
         arguments[i].thread_args = &thread_args;
 
-        error = pthread_create(&producers[i], NULL, &scan_producer, &arguments);
-        if(error != 0){printf("Error %i from create producer: %s\n", errno, strerror(errno));return;}
+        error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
+        if(error != 0){
+            fprintf(stderr, "Error %i creating producer thread %d: %s\n", errno, i, strerror(errno));
+            return;
+        }
     }
 
     // wait for threads to finish
@@ -225,13 +334,19 @@ void scan_coordinator(int num_vnas, int points, int start, int stop) {
 
 /*
  * Helper function. Issues info command and prints output
+ * 
+ * @param serial_port The file descriptor of the serial port
+ * @return 0 on success, 1 on error
  */
 int checkConnection(int serial_port) {
     int numBytes;
     char buffer[32];
 
-    unsigned char msg[] = "info\r";
-    write(serial_port, msg, sizeof(msg));
+    const char *msg = "info\r";
+    if (write_command(serial_port, msg) < 0) {
+        fprintf(stderr, "Failed to send info command\n");
+        return 1;
+    }
 
     do {
         numBytes = read(serial_port,&buffer,sizeof(char)*31);

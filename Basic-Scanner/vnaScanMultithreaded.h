@@ -54,30 +54,49 @@ struct datapoint_NanoVNAH {
  * 
  * We loop through the ports in reverse order to ensure that VNA_COUNT is
  * always accurate and if a fatal error occurs a new call of close_and_reset_all()
- * would not try to close an alread-closed port
+ * would not try to close an already-closed port
  */
 void close_and_reset_all();
+
+/*
+ * Opens a serial port
+ * 
+ * @param port The device path (e.g., "/dev/ttyACM0")
+ * @return File descriptor on success, -1 on failure
+ */
+int open_serial(const char *port);
+
+/*
+ * Initialise port settings
+ * 
+ * Edits port settings to interact with a serial interface.
+ * Sets up 115200 baud, 8N1, raw mode, no flow control, with timeout.
+ * Flags should only be edited with bitwise operations.
+ * Writes are permanent: initial settings are kept to restore on program close.
+ * 
+ * @param serial_port should already be opened successfully
+ * @return initial settings to restore. Also stored in global variable.
+ */
+struct termios init_serial_settings(int serial_port);
+
+/*
+ * Writes a command to the serial port with error checking
+ * 
+ * @param fd The file descriptor of the serial port
+ * @param cmd The command string to send (should include \r terminator)
+ * @return Number of bytes written on success, -1 on error
+ */
+ssize_t write_command(int fd, const char *cmd);
 
 /*
  * Fatal error handling. 
  * 
  * Calls close_and_reset_all before allowing the program to exit normally.
  * 
+ * @param sig The signal number
  * @fatal_error_in_progress to prevent infinite recursion.
  */
 void fatal_error_signal(int sig);
-
-/*
- * Initialise port settings
- * 
- * Edits port settings to interact with a serial interface.
- * Flags should only be edited with bitwise operations.
- * Writes are permanent: initial settings are kept to restore on program close.
- * 
- * @serial_port should already be opened successfully
- * @return initial settings to restore. Also stored in global variable.
- */
-struct termios init_serial_settings(int serial_port);
 
 //------------------------
 // SCAN LOGIC
