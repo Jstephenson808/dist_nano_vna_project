@@ -331,11 +331,7 @@ void* scan_consumer(void *arguments) {
         while (args->thread_args->count == 0 && complete < VNA_COUNT) {
             pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
         }
-        // Check if we should exit: no data in buffer and all producers done
-        if (args->thread_args->count == 0 && complete >= VNA_COUNT) {
-            pthread_mutex_unlock(&args->thread_args->lock);
-            break;
-        }
+
         struct datapoint_NanoVNAH *data = args->buffer[args->thread_args->out];
         args->buffer[args->thread_args->out] = NULL;
         args->thread_args->out = (args->thread_args->out + 1) % N;
