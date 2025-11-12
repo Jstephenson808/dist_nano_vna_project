@@ -254,7 +254,7 @@ void* scan_producer(void *arguments) {
         if (args->nbr_sweeps > 1) {
             printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
         }
-        int total_scans = args->points / POINTS;
+        int total_scans = args->nbr_scans;
         int step = (args->stop - args->start) / total_scans;
         int current = args->start;
         while (total_scans > 0) {
@@ -350,7 +350,7 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int nbr_sweeps) {
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps) {
     // Reset VNA_COUNT for clean state on subsequent runs
     VNA_COUNT = 0;
     
@@ -403,7 +403,7 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int n
         VNA_COUNT++;
 
         arguments[i].serial_port = SERIAL_PORTS[i];
-        arguments[i].points = points;
+        arguments[i].nbr_scans = nbr_scans;
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].nbr_sweeps = nbr_sweeps;
@@ -490,26 +490,26 @@ int main(int argc, char *argv[]) {
     // defaults
     long start_freq = 50000000;
     long stop_freq = 900000000;
-    int nbr_points = 10100;
+    int nbr_scans = 100;
     int nbr_nanoVNAs = 1;
     int nbr_sweeps = 1;
 
     if (argc > 1) {
         if (argc != 6) {
-            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_points> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
-            fprintf(stderr, "Example: %s 50000000 900000000 10100 1 1\n", argv[0]);
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
+            fprintf(stderr, "Example: %s 50000000 900000000 100 1 1\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
             return EXIT_FAILURE;
         }
 
         start_freq = atol(argv[1]);
         stop_freq = atol(argv[2]);
-        nbr_points = atoi(argv[3]);
+        nbr_scans = atoi(argv[3]);
         nbr_nanoVNAs = atoi(argv[4]);
         nbr_sweeps = atoi(argv[5]);
 
         // Validation of arguments
-        if (start_freq <= 0 || stop_freq <= 0 || nbr_points <= 0 || 
+        if (start_freq <= 0 || stop_freq <= 0 || nbr_scans <= 0 || 
             nbr_nanoVNAs <= 0 || nbr_sweeps <= 0) {
             fprintf(stderr, "Error: All arguments must be positive numbers\n");
             return EXIT_FAILURE;
@@ -521,7 +521,7 @@ int main(int argc, char *argv[]) {
         }
     } else {
         printf("Running default scan: %ld Hz to %ld Hz, %d points, %d VNA(s), %d sweep(s)\n",
-               start_freq, stop_freq, nbr_points, nbr_nanoVNAs, nbr_sweeps);
+               start_freq, stop_freq, nbr_scans*POINTS, nbr_nanoVNAs, nbr_sweeps);
     }
 
     // assign error handler
@@ -536,14 +536,14 @@ int main(int argc, char *argv[]) {
 
     // call a scan (with one nanoVNA)
     
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_points, start_freq, stop_freq, nbr_sweeps);    
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, nbr_sweeps);    
 
     // finish timing
     gettimeofday(&stop, NULL);
     double elapsed = (double)(stop.tv_sec - start.tv_sec) + 
                      (double)(stop.tv_usec - start.tv_usec) / 1000000.0;
     
-    int total_points = nbr_points * nbr_sweeps;
+    int total_points = (nbr_scans * POINTS) * nbr_sweeps;
     printf("---\ntook %.6f s\n", elapsed);
     printf("%.6f s per point measurement\n", elapsed / total_points);
     printf("%.2f points per second\n", total_points / elapsed);

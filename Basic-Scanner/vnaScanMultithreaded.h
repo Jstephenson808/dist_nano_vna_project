@@ -164,7 +164,7 @@ extern volatile atomic_int complete;
  */
 struct scan_producer_args {
     int serial_port;
-    int points;
+    int nbr_scans;
     int start;
     int stop;
     int nbr_sweeps; 
@@ -198,13 +198,13 @@ void* scan_consumer(void *args);
  * Resets ports, frees memory, and exits
  * 
  * @param num_vnas Number of VNAs to scan with
- * @param points Total number of data points to collect
+ * @param nbr_scans Total number of scans, determining number of data points to collect (101 dp per scan)
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
  * 
  * TODO: Make functional for multiple VNAs
  */
-void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int nbr_sweeps);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps);
 
 #endif
