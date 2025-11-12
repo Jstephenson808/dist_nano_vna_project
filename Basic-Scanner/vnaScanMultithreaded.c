@@ -328,8 +328,13 @@ void* scan_consumer(void *arguments) {
 
     while (complete < VNA_COUNT || (args->thread_args->count != 0)) {
         pthread_mutex_lock(&args->thread_args->lock);
-        while (args->thread_args->count == 0) {
+        while (args->thread_args->count == 0 && complete < VNA_COUNT) {
             pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
+        }
+        // Check if we should exit: no data in buffer and all producers done
+        if (args->thread_args->count == 0 && complete >= VNA_COUNT) {
+            pthread_mutex_unlock(&args->thread_args->lock);
+            break;
         }
         struct datapoint_NanoVNAH *data = args->buffer[args->thread_args->out];
         args->buffer[args->thread_args->out] = NULL;
@@ -350,6 +355,9 @@ void* scan_consumer(void *arguments) {
 }
 
 void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int nbr_sweeps) {
+    // Reset VNA_COUNT for clean state on subsequent runs
+    VNA_COUNT = 0;
+    
     // Initialise global variables
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
@@ -491,7 +499,7 @@ int main(int argc, char *argv[]) {
     int nbr_sweeps = 1;
 
     if (argc > 1) {
-        if (argc != 5) {
+        if (argc != 6) {
             fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_points> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
             fprintf(stderr, "Example: %s 50000000 900000000 10100 1 1\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");

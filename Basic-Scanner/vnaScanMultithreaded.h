@@ -201,9 +201,10 @@ void* scan_consumer(void *args);
  * @param points Total number of data points to collect
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
+ * @param nbr_sweeps Number of frequency sweeps to perform
  * 
  * TODO: Make functional for multiple VNAs
  */
-void run_multithreaded_scan(int num_vnas, int points, int start, int stop);
+void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int nbr_sweeps);
 
 #endif
