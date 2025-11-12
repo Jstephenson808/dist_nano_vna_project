@@ -364,16 +364,7 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
     struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
     complete = 0;
 
-    pthread_t consumer;
-    struct scan_consumer_args consumer_args = {buffer,&thread_args};
-    int error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
-    if(error != 0){
-        fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        free(buffer);buffer = NULL;
-        free(SERIAL_PORTS);SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
-        return;
-    }
+    int error;
 
     // warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
@@ -410,6 +401,17 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
             fprintf(stderr, "Error %i creating producer thread %d: %s\n", errno, i, strerror(errno));
             return;
         }
+    }
+
+    pthread_t consumer;
+    struct scan_consumer_args consumer_args = {buffer,&thread_args};
+    error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
+    if(error != 0){
+        fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
+        free(buffer);buffer = NULL;
+        free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
+        return;
     }
 
     // wait for threads to finish
