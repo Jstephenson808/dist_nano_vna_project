@@ -1,4 +1,5 @@
 #include "vnaScanMultithreaded.h"
+
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 volatile atomic_int complete = 0; 
 
@@ -249,66 +250,74 @@ void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
 
-    int total_scans = args->points / POINTS;
-    int step = (args->stop - args->start) / total_scans;
-    int current = args->start;
-
-    while (total_scans > 0) {
-
-        // Send scan command
-        char msg_buff[50];
-        snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
-                 current, (int)round(current + step), POINTS, MASK);
-        
-        if (write_command(args->serial_port, msg_buff) < 0) {
-            fprintf(stderr, "Failed to send scan command\n");
-            return NULL;
+    for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
+        if (args->nbr_sweeps > 1) {
+            printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
         }
+        int total_scans = args->points / POINTS;
+        int step = (args->stop - args->start) / total_scans;
+        int current = args->start;
+        while (total_scans > 0) {
 
-        // Find binary header in response
-        int header_found = find_binary_header(args->serial_port, MASK, POINTS);
-        if (header_found != 1) {
-            fprintf(stderr, "Failed to find binary header\n");
-            return NULL;
-        }
-
-        // Receive data points
-        struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
-        if (!data) {
-            fprintf(stderr, "Failed to allocate memory for data points\n");
-            return NULL;
-        }
-
-        for (int i = 0; i < POINTS; i++) {
-            ssize_t bytes_read = read_exact(args->serial_port, 
-                                           (uint8_t*)(data + i), 
-                                           sizeof(struct datapoint_NanoVNAH));
-            if (bytes_read != sizeof(struct datapoint_NanoVNAH)) {
-                fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
-                        i, bytes_read, sizeof(struct datapoint_NanoVNAH));
-                free(data);
+            // Send scan command
+            char msg_buff[50];
+            snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
+                    current, (int)round(current + step), POINTS, MASK);
+            
+            if (write_command(args->serial_port, msg_buff) < 0) {
+                fprintf(stderr, "Failed to send scan command\n");
                 return NULL;
             }
-        }
 
-        // add to buffer
+            // Find binary header in response
+            int header_found = find_binary_header(args->serial_port, MASK, POINTS);
+            if (header_found != 1) {
+                fprintf(stderr, "Failed to find binary header\n");
+                return NULL;
+            }
 
-        pthread_mutex_lock(&args->thread_args->lock);
-        while (args->thread_args->count == N) {
-            pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
-        }
-        args->buffer[args->thread_args->in] = data;
-        args->thread_args->in = (args->thread_args->in+1) % N;
-        args->thread_args->count++;
-        pthread_cond_signal(&args->thread_args->fill_cond);
-        pthread_mutex_unlock(&args->thread_args->lock);
+            // Receive data points
+            struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
+            if (!data) {
+                fprintf(stderr, "Failed to allocate memory for data points\n");
+                return NULL;
+            }
 
-        // finish loop
+            for (int i = 0; i < POINTS; i++) {
+                ssize_t bytes_read = read_exact(args->serial_port, 
+                                            (uint8_t*)(data + i), 
+                                            sizeof(struct datapoint_NanoVNAH));
+                if (bytes_read != sizeof(struct datapoint_NanoVNAH)) {
+                    fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
+                            i, bytes_read, sizeof(struct datapoint_NanoVNAH));
+                    free(data);
+                    return NULL;
+                }
+            }
 
-        total_scans--;
-        current += step;
+            // add to buffer
+
+            pthread_mutex_lock(&args->thread_args->lock);
+            while (args->thread_args->count == N) {
+                pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
+            }
+            args->buffer[args->thread_args->in] = data;
+            args->thread_args->in = (args->thread_args->in+1) % N;
+            args->thread_args->count++;
+            pthread_cond_signal(&args->thread_args->fill_cond);
+            pthread_mutex_unlock(&args->thread_args->lock);
+
+            // finish loop
+
+            total_scans--;
+            current += step;
+        }       
     }
+    pthread_mutex_lock(&args->thread_args->lock);
     complete++;
+    pthread_cond_broadcast(&args->thread_args->fill_cond); // Use broadcast for multiple consumers
+    pthread_mutex_unlock(&args->thread_args->lock);
+
     return NULL;
 }
 
@@ -340,7 +349,7 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
+void run_multithreaded_scan(int num_vnas, int points, int start, int stop, int nbr_sweeps) {
     // Initialise global variables
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
@@ -393,6 +402,7 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
         arguments[i].points = points;
         arguments[i].start = start;
         arguments[i].stop = stop;
+        arguments[i].nbr_sweeps = nbr_sweeps;
         arguments[i].buffer = buffer;
         arguments[i].thread_args = &thread_args;
 
@@ -480,10 +490,8 @@ int main(int argc, char *argv[]) {
     int nbr_nanoVNAs = 1;
     int nbr_sweeps = 1;
 
-    
-
     if (argc > 1) {
-        if (argc != 6) {
+        if (argc != 5) {
             fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_points> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
             fprintf(stderr, "Example: %s 50000000 900000000 10100 1 1\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
@@ -523,13 +531,8 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // call a scan (with one nanoVNA)
-    for (int sweep = 0; sweep < nbr_sweeps; sweep++) {
-        if (nbr_sweeps > 1) {
-            printf("=== Sweep %d of %d ===\n", sweep + 1, nbr_sweeps);
-        }
-        run_multithreaded_scan(nbr_nanoVNAs, nbr_points, start_freq, stop_freq);
-    }
     
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_points, start_freq, stop_freq, nbr_sweeps);    
 
     // finish timing
     gettimeofday(&stop, NULL);

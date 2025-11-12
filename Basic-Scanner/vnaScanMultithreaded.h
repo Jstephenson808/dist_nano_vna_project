@@ -167,6 +167,7 @@ struct scan_producer_args {
     int points;
     int start;
     int stop;
+    int nbr_sweeps; 
     struct datapoint_NanoVNAH **buffer;
     struct coordination_args *thread_args;
 };
