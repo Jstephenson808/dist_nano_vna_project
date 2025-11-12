@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <time.h>
+#include <stdatomic.h>
 
 #include <fcntl.h>
 #include <errno.h>
@@ -150,7 +151,7 @@ struct coordination_args {
     pthread_mutex_t lock;
 };
 // flag for when the consumer has no more to read. Currently no support for multiple consumers.
-extern volatile int complete;
+extern volatile atomic_int complete;
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer

@@ -1,6 +1,6 @@
 #include "vnaScanMultithreaded.h"
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
-volatile int complete = 0; 
+volatile atomic_int complete = 0; 
 
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
@@ -10,7 +10,9 @@ void fatal_error_signal(int sig) {
 
     close_and_reset_all();
     free(INITIAL_PORT_SETTINGS);
+    INITIAL_PORT_SETTINGS = NULL;
     free(SERIAL_PORTS);
+    SERIAL_PORTS = NULL;
 
     signal (sig, SIG_DFL);
     raise (sig);
@@ -306,7 +308,7 @@ void* scan_producer(void *arguments) {
         total_scans--;
         current += step;
     }
-    complete = 1;
+    complete++;
     return NULL;
 }
 
@@ -315,8 +317,7 @@ void* scan_consumer(void *arguments) {
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
 
-    // warning: this outer while loop will cause infinite waiting with multiple consumer threads
-    while (complete == 0 || (args->thread_args->count != 0)) {
+    while (complete < VNA_COUNT || (args->thread_args->count != 0)) {
         pthread_mutex_lock(&args->thread_args->lock);
         while (args->thread_args->count == 0) {
             pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
@@ -346,6 +347,8 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
     
     if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
         fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
+        if (SERIAL_PORTS) {free(SERIAL_PORTS);SERIAL_PORTS = NULL;}
+        if (INITIAL_PORT_SETTINGS) {free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;}
         return;
     }
 
@@ -353,21 +356,22 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
     struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
-        free(SERIAL_PORTS);
-        free(INITIAL_PORT_SETTINGS);
+        free(SERIAL_PORTS);SERIAL_PORTS=NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS=NULL;
         return;
     }
     
     struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
+    complete = 0;
 
     pthread_t consumer;
     struct scan_consumer_args consumer_args = {buffer,&thread_args};
     int error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        free(buffer);
-        free(SERIAL_PORTS);
-        free(INITIAL_PORT_SETTINGS);
+        free(buffer);buffer = NULL;
+        free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
     }
 
@@ -384,9 +388,9 @@ void run_multithreaded_scan(int num_vnas, int points, int start, int stop) {
                 restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
                 close(SERIAL_PORTS[j]);
             }
-            free(buffer);
-            free(SERIAL_PORTS);
-            free(INITIAL_PORT_SETTINGS);
+            free(buffer);buffer = NULL;
+            free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+            free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
         }
         
