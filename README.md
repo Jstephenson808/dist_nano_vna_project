@@ -55,7 +55,7 @@ cd jh05-main
 ### 2. Build C Scanner
 
 ```bash
-cd Basic-Scanner
+cd src/vnaScanC
 make
 ```
 
@@ -66,7 +66,7 @@ make
 The primary scanner is `vnaScanMultithreaded`, which supports single or multiple VNA devices:
 
 ```bash
-cd Basic-Scanner
+cd src/vnaScanC
 ./vnaScanMultithreaded <start_freq> <stop_freq> <points> <num_vnas>
 ```
 
@@ -106,7 +106,7 @@ The scanner supports different mask values for output control:
 ### Building from Source
 
 ```bash
-cd Basic-Scanner
+cd src/vnaScanC
 make clean
 make
 ```
