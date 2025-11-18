@@ -128,7 +128,7 @@ make
 
 ## Team
 Team JH05 - University of Glasgow  
-Level 3 Team Project H (2024/2025)
+Level 3 Team Project H (2025/2026)
 
 ## License
 
@@ -142,4 +142,4 @@ GNU GPL v3.0
 
 ## Project Status
 
-**Active Development** - Academic project for 2024/2025 session
+**Active Development** - Academic project for 2025/2026 session
