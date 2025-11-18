@@ -284,15 +284,20 @@ void* scan_producer(void *arguments) {
             }
 
             for (int i = 0; i < POINTS; i++) {
+                // Read raw data (20 bytes from NanoVNA)
                 ssize_t bytes_read = read_exact(args->serial_port, 
-                                            (uint8_t*)(data + i), 
-                                            sizeof(struct datapoint_NanoVNAH));
-                if (bytes_read != sizeof(struct datapoint_NanoVNAH)) {
+                                                (uint8_t*)&data[i].data, 
+                                                sizeof(struct nanovna_raw_datapoint));
+                
+                if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
                     fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
-                            i, bytes_read, sizeof(struct datapoint_NanoVNAH));
+                            i, bytes_read, sizeof(struct nanovna_raw_datapoint));
                     free(data);
                     return NULL;
                 }
+                
+                // Set VNA ID (software metadata)
+                data[i].vna_id = args->vna_id;
             }
 
             // add to buffer
@@ -340,7 +345,10 @@ void* scan_consumer(void *arguments) {
         pthread_mutex_unlock(&args->thread_args->lock);
 
         for (int i = 0; i < POINTS; i++) {
-            printf("(%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", total_count, data[i].frequency, data[i].s11.re, data[i].s11.im, data[i].s21.re, data[i].s21.im);
+            printf("VNA%d (%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
+                   data[i].vna_id, total_count, data[i].data.frequency, 
+                   data[i].data.s11.re, data[i].data.s11.im, 
+                   data[i].data.s21.re, data[i].data.s21.im);
             total_count++;
         }
 
@@ -402,6 +410,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         INITIAL_PORT_SETTINGS[i] = configure_serial(SERIAL_PORTS[i]);
         VNA_COUNT++;
 
+        arguments[i].vna_id = i;
         arguments[i].serial_port = SERIAL_PORTS[i];
         arguments[i].nbr_scans = nbr_scans;
         arguments[i].start = start;

@@ -42,10 +42,18 @@ struct complex {
     float re;
     float im;
 };
+
+// Raw binary data from NanoVNA (exactly 20 bytes as sent over serial)
+struct nanovna_raw_datapoint {
+    uint32_t frequency;       // 4 bytes
+    struct complex s11;       // 8 bytes (2 floats)
+    struct complex s21;       // 8 bytes (2 floats)
+};
+
+// Internal representation with metadata
 struct datapoint_NanoVNAH {
-    uint32_t frequency;
-    struct complex s11;
-    struct complex s21;
+    int vna_id;                           // Which VNA produced this data
+    struct nanovna_raw_datapoint data;    // Raw measurement from device
 };
 
 /**
@@ -163,6 +171,7 @@ extern volatile atomic_int complete;
  * @param args pointer to scan_producer_args struct used to pass arguments into this function
  */
 struct scan_producer_args {
+    int vna_id;
     int serial_port;
     int nbr_scans;
     int start;
@@ -198,12 +207,11 @@ void* scan_consumer(void *args);
  * Resets ports, frees memory, and exits
  * 
  * @param num_vnas Number of VNAs to scan with
- * @param nbr_scans Total number of scans, determining number of data points to collect (101 dp per scan)
+ * @param nbr_scans Total number of scans per VNA, determining number of data points to collect (101 dp per scan)
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
- * 
- * TODO: Make functional for multiple VNAs
+ * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports);
 
