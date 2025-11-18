@@ -205,6 +205,6 @@ void* scan_consumer(void *args);
  * 
  * TODO: Make functional for multiple VNAs
  */
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports);
 
 #endif

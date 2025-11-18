@@ -350,7 +350,7 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps) {
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports) {
     // Reset VNA_COUNT for clean state on subsequent runs
     VNA_COUNT = 0;
     
@@ -384,7 +384,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     pthread_t producers[num_vnas];
     for(int i = 0; i < num_vnas; i++) {
         // Open serial port with error checking
-        SERIAL_PORTS[i] = open_serial("/dev/ttyACM0"); // Will need logic to decide port
+        SERIAL_PORTS[i] = open_serial(ports[i]); // Will need logic to decide port
         if (SERIAL_PORTS[i] < 0) {
             fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
             // Clean up already opened ports
@@ -495,9 +495,9 @@ int main(int argc, char *argv[]) {
     int nbr_sweeps = 1;
 
     if (argc > 1) {
-        if (argc != 6) {
-            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <nbr_nanoVNAs> <nbr_sweeps>\n", argv[0]);
-            fprintf(stderr, "Example: %s 50000000 900000000 100 1 1\n", argv[0]);
+        if (argc < 6) {
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <nbr_nanoVNAs> <nbr_sweeps> [port1] [port2] ...\n", argv[0]);
+            fprintf(stderr, "Example: %s 50000000 900000000 100 2 1 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
             return EXIT_FAILURE;
         }
@@ -519,9 +519,19 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Error: start_freq must be less than stop_freq\n");
             return EXIT_FAILURE;
         }
+
+        if (argc < 6 + nbr_nanoVNAs) {
+            fprintf(stderr, "Error: Must provide %d serial port path(s) after the 5 parameters\n", nbr_nanoVNAs);
+            fprintf(stderr, "You provided: %d port(s), need: %d\n", argc - 6, nbr_nanoVNAs);
+            return EXIT_FAILURE;
+        }
+
     } else {
         printf("Running default scan: %ld Hz to %ld Hz, %d points, %d VNA(s), %d sweep(s)\n",
                start_freq, stop_freq, nbr_scans*POINTS, nbr_nanoVNAs, nbr_sweeps);
+        
+        // Default: try /dev/ttyACM0
+        fprintf(stderr, "Warning: No ports specified, will use hardcoded /dev/ttyACM0\n");
     }
 
     // assign error handler
@@ -535,8 +545,9 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // call a scan (with one nanoVNA)
-    
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, nbr_sweeps);    
+    const char **ports = (const char **)&argv[6];
+
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, nbr_sweeps, ports);    
 
     // finish timing
     gettimeofday(&stop, NULL);
