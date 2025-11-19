@@ -1,7 +1,8 @@
 #include "vnaScanMultithreaded.h"
 
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
-volatile atomic_int complete = 0; 
+volatile atomic_int complete = 0;
+struct timeval program_start_time;
 
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
@@ -351,9 +352,10 @@ void* scan_consumer(void *arguments) {
         pthread_mutex_unlock(&args->thread_args->lock);
 
         for (int i = 0; i < POINTS; i++) {
-            printf("VNA%d (%d) s:%ld r:%ld| %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
-                   data->vna_id, total_count, 
-                   data->send_time.tv_usec, data->recieve_time.tv_usec,
+            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
+                   data->vna_id, total_count,
+                   ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
+                   ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec) + (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
                    data->point[i].frequency, 
                    data->point[i].s11.re, data->point[i].s11.im, 
                    data->point[i].s21.re, data->point[i].s21.im);
@@ -380,6 +382,8 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         if (INITIAL_PORT_SETTINGS) {free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;}
         return;
     }
+
+    gettimeofday(&program_start_time, NULL);
 
     // Create consumer and producer threads
     struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
