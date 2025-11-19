@@ -499,14 +499,14 @@ int main(int argc, char *argv[]) {
     // defaults
     long start_freq = 50000000;
     long stop_freq = 900000000;
-    int nbr_scans = 100;
+    int nbr_scans = 20;
+    int nbr_sweeps = 5;
     int nbr_nanoVNAs = 1;
-    int nbr_sweeps = 1;
 
     if (argc > 1) {
         if (argc < 6) {
-            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <nbr_nanoVNAs> <nbr_sweeps> [port1] [port2] ...\n", argv[0]);
-            fprintf(stderr, "Example: %s 50000000 900000000 100 2 1 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <nbr_sweeps> <nbr_nanoVNAs> [port1] [port2] ...\n", argv[0]);
+            fprintf(stderr, "Example: %s 50000000 900000000 20 5 2 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
             return EXIT_FAILURE;
         }
@@ -514,8 +514,8 @@ int main(int argc, char *argv[]) {
         start_freq = atol(argv[1]);
         stop_freq = atol(argv[2]);
         nbr_scans = atoi(argv[3]);
-        nbr_nanoVNAs = atoi(argv[4]);
-        nbr_sweeps = atoi(argv[5]);
+        nbr_sweeps = atoi(argv[4]);
+        nbr_nanoVNAs = atoi(argv[5]);
 
         // Validation of arguments
         if (start_freq <= 0 || stop_freq <= 0 || nbr_scans <= 0 || 

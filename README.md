@@ -67,25 +67,26 @@ The primary scanner is `vnaScanMultithreaded`, which supports single or multiple
 
 ```bash
 cd src/vnaScanC
-./vnaScanMultithreaded <start_freq> <stop_freq> <points> <num_vnas> [port 1] [port 2] ...
+./vnaScanMultithreaded <start_freq> <stop_freq> <scans> <sweeps> <num_vnas> [port 1] [port 2] ...
 ```
 
 **Examples:**
 
-Single VNA, full frequency sweep:
+Single VNA, single 101 point sweep:
 ```bash
-./vnaScanMultithreaded 50000000 900000000 101 1 dev/ttyACM0
+./vnaScanMultithreaded 50000000 900000000 1 1 1 dev/ttyACM0
 ```
 
-Multiple VNAs (parallel scanning):
+Single VNA, five 2020 point sweeps:
 ```bash
-./vnaScanMultithreaded 50000000 900000000 101 2 dev/ttyACM0 dev/ttyACM1
+./vnaScanMultithreaded 50000000 900000000 20 5 1 dev/ttyACM0
 ```
 
-Short range test:
+Multiple VNAs (parallel scanning), five 2020 point sweeps each:
 ```bash
-./vnaScanMultithreaded 50000000 100000000 51 1 dev/ttyACM0
+./vnaScanMultithreaded 50000000 900000000 20 5 2 dev/ttyACM0 dev/ttyACM1
 ```
+
 
 ## Scan Modes
 
