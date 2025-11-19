@@ -53,7 +53,8 @@ struct nanovna_raw_datapoint {
 // Internal representation with metadata
 struct datapoint_NanoVNAH {
     int vna_id;                           // Which VNA produced this data
-    struct nanovna_raw_datapoint data;    // Raw measurement from device
+    struct timeval send_time, recieve_time;
+    struct nanovna_raw_datapoint point[POINTS];    // Raw measurement from device
 };
 
 /**

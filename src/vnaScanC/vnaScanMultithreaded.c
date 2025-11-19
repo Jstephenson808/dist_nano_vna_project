@@ -249,6 +249,7 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
 void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
+    struct timeval send_time, recieve_time;
 
     for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
         if (args->nbr_sweeps > 1) {
@@ -260,6 +261,7 @@ void* scan_producer(void *arguments) {
         while (total_scans > 0) {
 
             // Send scan command
+            gettimeofday(&send_time, NULL);
             char msg_buff[50];
             snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
                     current, (int)round(current + step), POINTS, MASK);
@@ -277,7 +279,7 @@ void* scan_producer(void *arguments) {
             }
 
             // Receive data points
-            struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH) * POINTS);
+            struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH));
             if (!data) {
                 fprintf(stderr, "Failed to allocate memory for data points\n");
                 return NULL;
@@ -286,7 +288,7 @@ void* scan_producer(void *arguments) {
             for (int i = 0; i < POINTS; i++) {
                 // Read raw data (20 bytes from NanoVNA)
                 ssize_t bytes_read = read_exact(args->serial_port, 
-                                                (uint8_t*)&data[i].data, 
+                                                (uint8_t*)&data->point[i], 
                                                 sizeof(struct nanovna_raw_datapoint));
                 
                 if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
@@ -295,10 +297,14 @@ void* scan_producer(void *arguments) {
                     free(data);
                     return NULL;
                 }
-                
-                // Set VNA ID (software metadata)
-                data[i].vna_id = args->vna_id;
             }
+
+            // Set VNA ID (software metadata)
+            data->vna_id = args->vna_id;
+            // Set Timestamps
+            gettimeofday(&recieve_time, NULL);
+            data->send_time = send_time;
+            data->recieve_time = recieve_time;
 
             // add to buffer
 
@@ -345,10 +351,12 @@ void* scan_consumer(void *arguments) {
         pthread_mutex_unlock(&args->thread_args->lock);
 
         for (int i = 0; i < POINTS; i++) {
-            printf("VNA%d (%d) %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
-                   data[i].vna_id, total_count, data[i].data.frequency, 
-                   data[i].data.s11.re, data[i].data.s11.im, 
-                   data[i].data.s21.re, data[i].data.s21.im);
+            printf("VNA%d (%d) s:%ld r:%ld| %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
+                   data->vna_id, total_count, 
+                   data->send_time.tv_usec, data->recieve_time.tv_usec,
+                   data->point[i].frequency, 
+                   data->point[i].s11.re, data->point[i].s11.im, 
+                   data->point[i].s21.re, data->point[i].s21.im);
             total_count++;
         }
 
