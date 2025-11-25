@@ -1,33 +1,38 @@
-CC=clang
-CFLAGS=-Wall -Werror
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -std=c11 -O2
 
+# Cross-platform commands
 CLEANUP = rm -f
-MKDIR = mkdir -p
 
-ROOT_DIR = ../..
-TEST_DIR = ${ROOT_DIR}/test/TestVnaScanC
-UNITY_DIR = ${ROOT_DIR}/tools/Unity
+# Detect OS for executable extension
+ifeq ($(OS),Windows_NT)
+    EXE = .exe
+else
+    EXE =
+endif
 
-UNITY_SOURCE = ${UNITY_DIR}/unity.c
-INC_DIRS=-I./ -I$(UNITY_DIR)
-SYMBOLS=
+# Program names
+PROGRAM = vnaScan$(EXE)
+SOURCES = VnaScanMultithreaded.c VnaScanMultithreadedMain.c
+OBJECTS = $(SOURCES:.c=.o)
 
-MULTI_NAME = VnaScanMultithreaded
-MULTI_LINK = -lpthread -lm
-MULTI_TEST_NAME = ${TEST_DIR}/Test${MULTI_NAME}
-MULTI_TEST_SRC_FILES = ${UNITY_SOURCE} ${MULTI_NAME}.c ${MULTI_TEST_NAME}.c
+# Libraries
+LIBS = -lserialport -lpthread -lm
 
-all: scan scan-multithreaded scan-multithreaded-test
+# Default target
+all: $(PROGRAM)
 
-scan:
-	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
+# Build executable
+$(PROGRAM): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(PROGRAM) $(LIBS)
 
-scan-multithreaded:
-	$(CC) $(CFLAGS) ${MULTI_NAME}.c ${MULTI_NAME}Main.c -o ${MULTI_NAME} ${MULTI_LINK}
+# Compile source files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-scan-multithreaded-test:
-	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} ${MULTI_LINK}
-	- ./${MULTI_TEST_NAME}
-
+# Clean build artifacts
 clean:
-	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME}
+	$(CLEANUP) $(PROGRAM) $(OBJECTS)
+
+.PHONY: all clean
