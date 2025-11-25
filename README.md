@@ -20,16 +20,17 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ```
 ├── README.md
 ├── src/                                    # Main project directory
-│   ├── vnaScanC/                           
+│   ├── VnaScanC/                           
 │   │   ├── Makefile                        # Build configuration
-│   │   ├── vnaScan.c                       # Prototype: single-threaded C scanner
-│   │   ├── vnaScanMultithreaded.c          # Main multithreaded scanner implementation
-│   │   └── vnaScanMultithreaded.h          # Data structures and function declarations
-│   └── vnaScanPython/
-│       └── vnaScan.py                      # Prototype: initial Python implementation
+│   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
+│   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
+│   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
+│   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
+│   └── VnaScanPython/
+│       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
-    └── vnaScanCTest/
-        └── vnaScanMultithreadedTest.c      # Automated tests for multithreaded scanner implementation
+    └── VnaScanCTest/
+        └── VnaScanMultithreadedTest.c      # Automated tests for multithreaded scanner implementation
 ```
 
 **Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is **`vnaScanMultithreaded.c`** and **`vnaScanMultithreaded.h`**.
@@ -43,6 +44,7 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ### Software
 - **Linux** (tested), macOS, or Windows
 - **C Compiler** (Clang)
+
 ## Installation
 
 ### 1. Clone Repository
@@ -55,36 +57,38 @@ cd jh05-main
 ### 2. Build C Scanner
 
 ```bash
-cd src/vnaScanC
+cd src/VnaScanC
 make
 ```
 
+This will also create and run unit tests for VnaScanMultithreaded, telling you if they pass or fail.
+
 ## Usage
 
-### Main Scanner - Multithreaded Implementation
+### Main Scanner
 
-The primary scanner is `vnaScanMultithreaded`, which supports single or multiple VNA devices:
+The primary scanner is `VnaScanMultithreaded`, which supports single or multiple VNA devices:
 
 ```bash
-cd src/vnaScanC
-./vnaScanMultithreaded <start_freq> <stop_freq> <scans> <sweeps> <num_vnas> [port 1] [port 2] ...
+cd src/VnaScanC
+./VnaScanMultithreaded <start_freq> <stop_freq> <scans> <sweeps> <num_vnas> [port 1] [port 2] ...
 ```
 
 **Examples:**
 
 Single VNA, single 101 point sweep:
 ```bash
-./vnaScanMultithreaded 50000000 900000000 1 1 1 dev/ttyACM0
+./VnaScanMultithreaded 50000000 900000000 1 1 1 dev/ttyACM0
 ```
 
 Single VNA, five 2020 point sweeps:
 ```bash
-./vnaScanMultithreaded 50000000 900000000 20 5 1 dev/ttyACM0
+./VnaScanMultithreaded 50000000 900000000 20 5 1 dev/ttyACM0
 ```
 
 Multiple VNAs (parallel scanning), five 2020 point sweeps each:
 ```bash
-./vnaScanMultithreaded 50000000 900000000 20 5 2 dev/ttyACM0 dev/ttyACM1
+./VnaScanMultithreaded 50000000 900000000 20 5 2 dev/ttyACM0 dev/ttyACM1
 ```
 
 
@@ -107,7 +111,7 @@ The scanner supports different mask values for output control:
 ### Building from Source
 
 ```bash
-cd src/vnaScanC
+cd src/VnaScanC
 make clean
 make
 ```
@@ -115,17 +119,13 @@ make
 ### Code Structure
 
 **Main Implementation:**
-- `vnaScanMultithreaded.c` - Producer-consumer multithreading for parallel VNA operation
-- `vnaScanMultithreaded.h` - Data structures, thread coordination, and function declarations
+- `VnaScanMultithreaded.c` - Functions to allow for multithreaded, multi-VNA scans.
+- `VnaScanMultithreadedMain.c` - Driver file, takes in user input and calls relevant functions.
+- `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
 
 **Prototypes (Development History):**
-- `vnaScan.c` - Initial single-threaded C implementation
-- `vnaScan.py` - Initial Python prototype
-
-**Architecture:**
-- Producer threads: One per VNA device, handles scanning and data acquisition
-- Consumer thread: Single thread for processing and 
-- Shared buffer: Thread-safe coordination using mutexes and condition variables
+- `VnaScan.c` - Initial single-threaded C implementation
+- `VnaScan.py` - Initial Python prototype
 
 ## Team
 Team JH05 - University of Glasgow  
