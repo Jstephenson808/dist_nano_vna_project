@@ -25,17 +25,6 @@
 #define N 100
 
 /**
- * Declaring global variables (for error handling and port consistency)
- * 
- * @SERIAL_PORTS is a pointer to an array of all serial port connections
- * @INITIAL_PORT_SETTINGS is a pointer to an array of all serial port's initial settings
- * @VNA_COUNT is the number of VNAs currently connected
- */
-int *SERIAL_PORTS = NULL;
-struct termios* INITIAL_PORT_SETTINGS = NULL;
-int VNA_COUNT = 0;
-
-/**
  * Declaring structs for data points
  */
 struct complex {
