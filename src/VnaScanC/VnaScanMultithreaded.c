@@ -2,34 +2,22 @@
 
 /**
  * Declaring global variables (for error handling and port consistency)
- * 
- * @SERIAL_PORTS is a pointer to an array of all serial port connections
- * @INITIAL_PORT_SETTINGS is a pointer to an array of all serial port's initial settings
- * @VNA_COUNT is the number of VNAs currently connected
  */
 struct sp_port **SERIAL_PORTS = NULL;
 struct sp_port_config **INITIAL_PORT_SETTINGS = NULL;
 int VNA_COUNT = 0;
 
-static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
+static volatile sig_atomic_t fatal_error_in_progress = 0;
 volatile atomic_int complete = 0;
 struct timeval program_start_time;
 
-/**
- * Cross-platform timing function
- */
+// Cross-platform timing function
 void get_current_time(struct timeval *tv) {
 #ifdef _WIN32
-    // MinGW64 provides gettimeofday, but we can use _ftime as fallback if needed
-    #if defined(__MINGW64__) || defined(__MINGW32__)
-        gettimeofday(tv, NULL);
-    #else
-        // Fallback for older Windows compilers
-        struct _timeb timebuffer;
-        _ftime(&timebuffer);
-        tv->tv_sec = (long)timebuffer.time;
-        tv->tv_usec = timebuffer.millitm * 1000;
-    #endif
+    struct _timeb timebuffer;
+    _ftime(&timebuffer);
+    tv->tv_sec = (long)timebuffer.time;
+    tv->tv_usec = timebuffer.millitm * 1000;
 #else
     gettimeofday(tv, NULL);
 #endif
@@ -42,144 +30,82 @@ void fatal_error_signal(int sig) {
     fatal_error_in_progress = 1;
 
     close_and_reset_all();
-    
-    if (INITIAL_PORT_SETTINGS) {
-        for (int i = 0; i < VNA_COUNT; i++) {
-            if (INITIAL_PORT_SETTINGS[i]) {
-                sp_free_config(INITIAL_PORT_SETTINGS[i]);
-            }
-        }
-        free(INITIAL_PORT_SETTINGS);
-        INITIAL_PORT_SETTINGS = NULL;
-    }
-    
-    if (SERIAL_PORTS) {
-        free(SERIAL_PORTS);
-        SERIAL_PORTS = NULL;
-    }
+    free(INITIAL_PORT_SETTINGS);
+    INITIAL_PORT_SETTINGS = NULL;
+    free(SERIAL_PORTS);
+    SERIAL_PORTS = NULL;
 
     signal(sig, SIG_DFL);
     raise(sig);
 }
 
 /**
- * Opens a serial port using libserialport
- * 
- * @param port_name The device path (e.g., "/dev/ttyACM0" on Linux, "COM3" on Windows)
- * @param port Output parameter for the opened port
- * @return 0 on success, -1 on failure
+ * Opens a serial port
  */
-int open_serial(const char *port_name, struct sp_port **port) {
-    enum sp_return result;
+struct sp_port* open_serial(const char *port) {
+    struct sp_port *sp;
     
-    // Get port by name
-    result = sp_get_port_by_name(port_name, port);
-    if (result != SP_OK) {
-        fprintf(stderr, "Error finding port %s: %s\n", port_name, sp_last_error_message());
-        return -1;
+    if (sp_get_port_by_name(port, &sp) != SP_OK) {
+        fprintf(stderr, "Error finding serial port %s\n", port);
+        return NULL;
     }
     
-    // Open the port
-    result = sp_open(*port, SP_MODE_READ_WRITE);
-    if (result != SP_OK) {
-        fprintf(stderr, "Error opening port %s: %s\n", port_name, sp_last_error_message());
-        sp_free_port(*port);
-        return -1;
+    if (sp_open(sp, SP_MODE_READ_WRITE) != SP_OK) {
+        fprintf(stderr, "Error opening serial port %s: %s\n", port, sp_last_error_message());
+        sp_free_port(sp);
+        return NULL;
     }
     
-    return 0;
+    return sp;
 }
 
 /**
  * Configures serial port settings for NanoVNA communication
- * 
- * Sets up 115200 baud, 8N1, raw mode, no flow control
- * Saves original settings for later restoration
- * 
- * @param port The serial port to configure
- * @return The original port configuration to restore later, NULL on error
  */
 struct sp_port_config* configure_serial(struct sp_port *port) {
-    enum sp_return result;
-    struct sp_port_config *original_config;
+    // Save initial settings
+    struct sp_port_config *initial_config;
+    sp_new_config(&initial_config);
+    sp_get_config(port, initial_config);
     
-    // Allocate config structure for saving original settings
-    result = sp_new_config(&original_config);
-    if (result != SP_OK) {
-        fprintf(stderr, "Error allocating config: %s\n", sp_last_error_message());
-        return NULL;
-    }
-    
-    // Get current configuration
-    result = sp_get_config(port, original_config);
-    if (result != SP_OK) {
-        fprintf(stderr, "Error getting port config: %s\n", sp_last_error_message());
-        sp_free_config(original_config);
-        return NULL;
-    }
-    
-    // Configure port settings
+    // Configure port: 115200 baud, 8N1, no flow control
     sp_set_baudrate(port, 115200);
     sp_set_bits(port, 8);
     sp_set_parity(port, SP_PARITY_NONE);
     sp_set_stopbits(port, 1);
     sp_set_flowcontrol(port, SP_FLOWCONTROL_NONE);
     
-    return original_config;
+    return initial_config;
 }
 
 /**
  * Restores serial port to original settings
- * 
- * @param port The serial port
- * @param settings The original port configuration to restore
  */
 void restore_serial(struct sp_port *port, struct sp_port_config *settings) {
-    if (settings) {
-        enum sp_return result = sp_set_config(port, settings);
-        if (result != SP_OK) {
-            fprintf(stderr, "Error restoring port settings: %s\n", sp_last_error_message());
-        }
+    if (settings != NULL) {
+        sp_set_config(port, settings);
+        sp_free_config(settings);
     }
 }
 
 /**
  * Closes all serial ports and restores their initial settings
- * Loops through ports in reverse order to maintain VNA_COUNT accuracy
  */
 void close_and_reset_all() {
-    for (int i = VNA_COUNT - 1; i >= 0; i--) {
-        if (SERIAL_PORTS[i]) {
-            // Restore original settings before closing
-            if (INITIAL_PORT_SETTINGS && INITIAL_PORT_SETTINGS[i]) {
-                restore_serial(SERIAL_PORTS[i], INITIAL_PORT_SETTINGS[i]);
-            }
-            
-            // Close the serial port
-            enum sp_return result = sp_close(SERIAL_PORTS[i]);
-            if (result != SP_OK) {
-                fprintf(stderr, "Error closing port %d: %s\n", i, sp_last_error_message());
-            }
-            
-            // Free the port structure
-            sp_free_port(SERIAL_PORTS[i]);
-            SERIAL_PORTS[i] = NULL;
-        }
-        
+    for (int i = VNA_COUNT-1; i >= 0; i--) {
+        restore_serial(SERIAL_PORTS[i], INITIAL_PORT_SETTINGS[i]);
+        sp_close(SERIAL_PORTS[i]);
+        sp_free_port(SERIAL_PORTS[i]);
         VNA_COUNT--;
     }
 }
 
 /**
  * Writes a command to the serial port with error checking
- * 
- * @param port The serial port
- * @param cmd The command string to send (should include \r terminator)
- * @return Number of bytes written on success, -1 on error
  */
 ssize_t write_command(struct sp_port *port, const char *cmd) {
     size_t cmd_len = strlen(cmd);
-    enum sp_return result = sp_blocking_write(port, cmd, cmd_len, SERIAL_WRITE_TIMEOUT);
+    enum sp_return result = sp_blocking_write(port, cmd, cmd_len, 1000);
     
     if (result < 0) {
         fprintf(stderr, "Error writing to port: %s\n", sp_last_error_message());
@@ -194,50 +120,26 @@ ssize_t write_command(struct sp_port *port, const char *cmd) {
 /**
  * Reads exact number of bytes from serial port
  * Handles partial reads by continuing until all bytes are received
- * With retry logic for better reliability on high-latency systems
- * 
- * @param port The serial port
- * @param buffer The buffer to read data into
- * @param length The number of bytes to read
- * @return Number of bytes read on success, -1 on error, 0 on timeout
  */
 ssize_t read_exact(struct sp_port *port, uint8_t *buffer, size_t length) {
     size_t bytes_read = 0;
-    int retry_count = 0;
-    const int MAX_RETRIES = 3;
     
-    while (bytes_read < length && retry_count < MAX_RETRIES) {
+    while (bytes_read < length) {
         enum sp_return result = sp_blocking_read(port, buffer + bytes_read, 
-                                                  length - bytes_read, SERIAL_READ_TIMEOUT);
+                                                  length - bytes_read, 2000);
         
         if (result < 0) {
             fprintf(stderr, "Error reading from port: %s\n", sp_last_error_message());
             return -1;
         } else if (result == 0) {
-            // Timeout - retry if we've made partial progress
-            retry_count++;
-            if (bytes_read > 0 && retry_count < MAX_RETRIES) {
-                fprintf(stderr, "Timeout: read %zu of %zu bytes (retry %d/%d)\n", 
-                        bytes_read, length, retry_count, MAX_RETRIES);
-                // Continue trying - data might be coming slowly
-                continue;
-            } else {
+            // Timeout
+            if (bytes_read > 0) {
                 fprintf(stderr, "Timeout: only read %zu of %zu bytes\n", bytes_read, length);
-                return bytes_read;
             }
+            return bytes_read;
         }
         
         bytes_read += result;
-        
-        // If we made progress, reset retry count
-        if (result > 0) {
-            retry_count = 0;
-        }
-    }
-    
-    if (bytes_read < length) {
-        fprintf(stderr, "Failed to read complete data after %d retries: %zu of %zu bytes\n",
-                MAX_RETRIES, bytes_read, length);
     }
     
     return bytes_read;
@@ -245,17 +147,13 @@ ssize_t read_exact(struct sp_port *port, uint8_t *buffer, size_t length) {
 
 /**
  * Finds the binary header in the serial stream
- * Scans for header pattern (mask + points) using chunk-based reading
- * for better performance on Windows
+ * Scans byte-by-byte looking for the header pattern (mask + points)
  * 
- * @param port The serial port
- * @param expected_mask The expected mask value (e.g., 135)
- * @param expected_points The expected points value (e.g., 101)
- * @return 1 if header found, 0 if timeout/not found, -1 on error
+ * ORIGINAL ALGORITHM - Minimal changes from Linux version
  */
 int find_binary_header(struct sp_port *port, uint16_t expected_mask, uint16_t expected_points) {
     uint8_t window[4] = {0};
-    int max_bytes = 500;  // Maximum bytes to scan before giving up
+    int max_bytes = 500;
     
     // Read initial 4 bytes
     if (read_exact(port, window, 4) != 4) {
@@ -270,50 +168,36 @@ int find_binary_header(struct sp_port *port, uint16_t expected_mask, uint16_t ex
         return 1;
     }
     
-    // Scan through the stream using chunk-based reading (OPTIMIZED)
-    // Read chunks instead of single bytes to reduce USB overhead
-    #define CHUNK_SIZE 32
-    uint8_t chunk[CHUNK_SIZE];
-    int total_bytes_scanned = 4;  // Already read 4 bytes
-    
-    while (total_bytes_scanned < max_bytes) {
-        // Read a chunk of data
-        int bytes_to_read = (max_bytes - total_bytes_scanned < CHUNK_SIZE) ? 
-                            (max_bytes - total_bytes_scanned) : CHUNK_SIZE;
-        
-        enum sp_return result = sp_blocking_read(port, chunk, bytes_to_read, SERIAL_HEADER_TIMEOUT);
+    // Scan through the stream byte by byte (ORIGINAL APPROACH)
+    for (int i = 4; i < max_bytes; i++) {
+        uint8_t byte;
+        enum sp_return result = sp_blocking_read(port, &byte, 1, 1000);
         
         if (result < 0) {
-            fprintf(stderr, "Error reading header chunk: %s\n", sp_last_error_message());
+            fprintf(stderr, "Error reading header byte: %s\n", sp_last_error_message());
             return -1;
         } else if (result == 0) {
             fprintf(stderr, "Timeout waiting for binary header\n");
             return 0;
         }
         
-        // Scan through the chunk looking for header pattern
-        for (int i = 0; i < result; i++) {
-            // Shift window
-            window[0] = window[1];
-            window[1] = window[2];
-            window[2] = window[3];
-            window[3] = chunk[i];
-            
-            // Check for header match
-            mask = window[0] | (window[1] << 8);
-            points = window[2] | (window[3] << 8);
-            
-            if (mask == expected_mask && points == expected_points) {
-                return 1;  // Found header
-            }
-            
-            total_bytes_scanned++;
+        // Shift window
+        window[0] = window[1];
+        window[1] = window[2];
+        window[2] = window[3];
+        window[3] = byte;
+        
+        // Check for header match
+        mask = window[0] | (window[1] << 8);
+        points = window[2] | (window[3] << 8);
+        
+        if (mask == expected_mask && points == expected_points) {
+            return 1;  // Found header
         }
     }
     
     fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
     return 0;
-    #undef CHUNK_SIZE
 }
 
 void* scan_producer(void *arguments) {
@@ -340,15 +224,14 @@ void* scan_producer(void *arguments) {
                 return NULL;
             }
             
-            // CRITICAL: Give NanoVNA time to complete scan and prepare data
-            // Some firmware versions need this delay for reliable operation
+            // Give device time to prepare (helps with reliability)
             #ifdef _WIN32
-                Sleep(150);  // 150ms delay on Windows
+                Sleep(150);
             #else
-                usleep(150000);  // 150ms delay on Linux
+                usleep(150000);
             #endif
             
-            // Flush input buffer to clear any echo or stale data
+            // Flush any echo or stale data
             sp_flush(args->serial_port, SP_BUF_INPUT);
 
             // Find binary header in response
@@ -379,9 +262,8 @@ void* scan_producer(void *arguments) {
                 }
             }
 
-            // Set VNA ID (software metadata)
+            // Set VNA ID and timestamps
             data->vna_id = args->vna_id;
-            // Set Timestamps
             get_current_time(&recieve_time);
             data->send_time = send_time;
             data->recieve_time = recieve_time;
@@ -392,7 +274,7 @@ void* scan_producer(void *arguments) {
                 pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
             }
             args->buffer[args->thread_args->in] = data;
-            args->thread_args->in = (args->thread_args->in + 1) % N;
+            args->thread_args->in = (args->thread_args->in+1) % N;
             args->thread_args->count++;
             pthread_cond_signal(&args->thread_args->fill_cond);
             pthread_mutex_unlock(&args->thread_args->lock);
@@ -405,7 +287,7 @@ void* scan_producer(void *arguments) {
     
     pthread_mutex_lock(&args->thread_args->lock);
     complete++;
-    pthread_cond_broadcast(&args->thread_args->fill_cond); // Use broadcast for multiple consumers
+    pthread_cond_broadcast(&args->thread_args->fill_cond);
     pthread_mutex_unlock(&args->thread_args->lock);
 
     return NULL;
@@ -448,7 +330,7 @@ void* scan_consumer(void *arguments) {
 }
 
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports) {
-    // Reset VNA_COUNT for clean state on subsequent runs
+    // Reset VNA_COUNT for clean state
     VNA_COUNT = 0;
     
     // Initialise global variables
@@ -457,64 +339,45 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     
     if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
         fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
-        if (SERIAL_PORTS) {
-            free(SERIAL_PORTS);
-            SERIAL_PORTS = NULL;
-        }
-        if (INITIAL_PORT_SETTINGS) {
-            free(INITIAL_PORT_SETTINGS);
-            INITIAL_PORT_SETTINGS = NULL;
-        }
+        if (SERIAL_PORTS) {free(SERIAL_PORTS); SERIAL_PORTS = NULL;}
+        if (INITIAL_PORT_SETTINGS) {free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;}
         return;
     }
 
     get_current_time(&program_start_time);
 
-    // Create consumer and producer threads
-    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH*) * (N + 1));
+    // Create buffer
+    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH*)*(N+1));
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
-        free(SERIAL_PORTS);
-        SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS);
-        INITIAL_PORT_SETTINGS = NULL;
+        free(SERIAL_PORTS); SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
         return;
     }
     
-    struct coordination_args thread_args = {
-        .count = 0,
-        .in = 0,
-        .out = 0,
-        .remove_cond = PTHREAD_COND_INITIALIZER,
-        .fill_cond = PTHREAD_COND_INITIALIZER,
-        .lock = PTHREAD_MUTEX_INITIALIZER
-    };
+    struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
     complete = 0;
 
     int error;
 
+    // Create producer threads
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
     
-    for (int i = 0; i < num_vnas; i++) {
-        // Open serial port with error checking
-        if (open_serial(ports[i], &SERIAL_PORTS[i]) < 0) {
+    for(int i = 0; i < num_vnas; i++) {
+        // Open serial port
+        SERIAL_PORTS[i] = open_serial(ports[i]);
+        if (SERIAL_PORTS[i] == NULL) {
             fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
             // Clean up already opened ports
             for (int j = 0; j < i; j++) {
                 restore_serial(SERIAL_PORTS[j], INITIAL_PORT_SETTINGS[j]);
                 sp_close(SERIAL_PORTS[j]);
                 sp_free_port(SERIAL_PORTS[j]);
-                if (INITIAL_PORT_SETTINGS[j]) {
-                    sp_free_config(INITIAL_PORT_SETTINGS[j]);
-                }
             }
-            free(buffer);
-            buffer = NULL;
-            free(SERIAL_PORTS);
-            SERIAL_PORTS = NULL;
-            free(INITIAL_PORT_SETTINGS);
-            INITIAL_PORT_SETTINGS = NULL;
+            free(buffer); buffer = NULL;
+            free(SERIAL_PORTS); SERIAL_PORTS = NULL;
+            free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
             return;
         }
         
@@ -532,74 +395,59 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         arguments[i].thread_args = &thread_args;
 
         error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
-        if (error != 0) {
+        if(error != 0){
             fprintf(stderr, "Error creating producer thread %d\n", i);
             return;
         }
     }
 
+    // Create consumer thread
     pthread_t consumer;
     struct scan_consumer_args consumer_args = {buffer, &thread_args};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
-    if (error != 0) {
+    if(error != 0){
         fprintf(stderr, "Error creating consumer thread\n");
-        free(buffer);
-        buffer = NULL;
-        free(SERIAL_PORTS);
-        SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS);
-        INITIAL_PORT_SETTINGS = NULL;
+        free(buffer); buffer = NULL;
+        free(SERIAL_PORTS); SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
         return;
     }
 
     // Wait for threads to finish
-    for (int i = 0; i < num_vnas; i++) {
+    for(int i = 0; i < num_vnas; i++) {
         error = pthread_join(producers[i], NULL);
-        if (error != 0) {
-            printf("Error from join producer\n");
+        if(error != 0){
+            fprintf(stderr, "Error joining producer %d\n", i);
             return;
         }
     }
 
     error = pthread_join(consumer, NULL);
-    if (error != 0) {
-        printf("Error from join consumer\n");
+    if(error != 0){
+        fprintf(stderr, "Error joining consumer\n");
         return;
     }
 
-    // Finish up
+    // Cleanup
     free(buffer);
     buffer = NULL;
 
     close_and_reset_all();
-    
-    // Free configuration structures
-    if (INITIAL_PORT_SETTINGS) {
-        for (int i = 0; i < num_vnas; i++) {
-            if (INITIAL_PORT_SETTINGS[i]) {
-                sp_free_config(INITIAL_PORT_SETTINGS[i]);
-            }
-        }
-        free(INITIAL_PORT_SETTINGS);
-        INITIAL_PORT_SETTINGS = NULL;
-    }
-    
     free(SERIAL_PORTS);
     SERIAL_PORTS = NULL;
+    free(INITIAL_PORT_SETTINGS);
+    INITIAL_PORT_SETTINGS = NULL;
 
     return;
 }
 
 /**
  * Helper function. Issues info command and prints output
- * 
- * @param port The serial port
- * @return 0 on success, 1 on error
  */
 int test_connection(struct sp_port *port) {
     char buffer[32];
-
     const char *msg = "info\r";
+    
     if (write_command(port, msg) < 0) {
         fprintf(stderr, "Failed to send info command\n");
         return 1;
@@ -607,9 +455,9 @@ int test_connection(struct sp_port *port) {
 
     int numBytes;
     do {
-        numBytes = sp_blocking_read(port, buffer, 31, SERIAL_READ_TIMEOUT);
+        numBytes = sp_blocking_read(port, buffer, 31, 1000);
         if (numBytes < 0) {
-            printf("Error reading: %s\n", sp_last_error_message());
+            fprintf(stderr, "Error reading: %s\n", sp_last_error_message());
             return 1;
         }
         buffer[numBytes] = '\0';
