@@ -256,6 +256,7 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
     fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
     return 0;
 }
+
 /**
  * Bounded Buffer handling functions (do not access bounded buffer otherwise)
  */
@@ -304,6 +305,9 @@ struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
     return data;
 }
 
+/**
+ * producer / consumer functions
+ */
 void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
@@ -436,7 +440,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
                 restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
                 close(SERIAL_PORTS[j]);
             }
-            free(bounded_buffer.buffer);bounded_buffer.buffer = NULL;
+            destroy_bounded_buffer(&bounded_buffer);
             free(SERIAL_PORTS);SERIAL_PORTS = NULL;
             free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
