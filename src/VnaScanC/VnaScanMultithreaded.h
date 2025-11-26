@@ -1,144 +1,101 @@
-#ifndef VNASCANMULTITHREADED_H_
-#define VNASCANMULTITHREADED_H_
+#ifndef VNA_SCAN_MULTITHREADED_H
+#define VNA_SCAN_MULTITHREADED_H
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <math.h>
-#include <time.h>
-#include <stdatomic.h>
+#include <stdint.h>
 #include <pthread.h>
-
-// Cross-platform serial port library
+#include <sys/time.h>
 #include <libserialport.h>
-
-// Platform-specific includes for timing
-#ifdef _WIN32
-    #include <windows.h>
-    #include <sys/timeb.h>
-    #include <sys/time.h>
-#else
-    #include <sys/time.h>
-    #include <unistd.h>
-#endif
+#include <signal.h>
+#include <math.h>
 
 #define POINTS 101
-#define MASK 135
-#define N 100
+#define MASK   135
+#define N      64     // buffer size
 
-/**
- * Declaring structs for data points
+/*
+ * Raw NanoVNA datapoint
  */
-struct complex {
+struct complex_val {
     float re;
     float im;
 };
 
-// Raw binary data from NanoVNA (exactly 20 bytes as sent over serial)
 struct nanovna_raw_datapoint {
-    uint32_t frequency;       // 4 bytes
-    struct complex s11;       // 8 bytes (2 floats)
-    struct complex s21;       // 8 bytes (2 floats)
+    uint32_t frequency;
+    struct complex_val s11;
+    struct complex_val s21;
 };
 
-// Internal representation with metadata
+/*
+ * Buffer item: one whole sweep chunk
+ */
 struct datapoint_NanoVNAH {
-    int vna_id;                           // Which VNA produced this data
-    struct timeval send_time, recieve_time;
-    struct nanovna_raw_datapoint point[POINTS];    // Raw measurement from device
+    int vna_id;
+    struct timeval send_time;
+    struct timeval recieve_time;
+    struct nanovna_raw_datapoint point[POINTS];
 };
 
-/**
- * Cross-platform timing function
+/*
+ * Producer/consumer shared buffer monitor
  */
-void get_current_time(struct timeval *tv);
-
-/**
- * Closes all ports and restores their initial settings
- */
-void close_and_reset_all();
-
-/**
- * Restores serial port to original settings
- */
-void restore_serial(struct sp_port *port, struct sp_port_config *settings);
-
-/**
- * Opens a serial port
- */
-struct sp_port* open_serial(const char *port);
-
-/**
- * Initialise port settings
- */
-struct sp_port_config* configure_serial(struct sp_port *port);
-
-/**
- * Writes a command to the serial port with error checking
- */
-ssize_t write_command(struct sp_port *port, const char *cmd);
-
-/**
- * Reads exact number of bytes from serial port
- */
-ssize_t read_exact(struct sp_port *port, uint8_t *buffer, size_t length);
-
-/**
- * Finds the binary header in the serial stream
- */
-int find_binary_header(struct sp_port *port, uint16_t expected_mask, uint16_t expected_points);
-
-/**
- * Tests connection to NanoVNA by issuing info command
- */
-int test_connection(struct sp_port *port);
-
-/**
- * Fatal error handling
- */
-void fatal_error_signal(int sig);
-
-//------------------------
-// SCAN LOGIC
-//------------------------
-
-/**
- * Coordination variables for multithreading
- */
-struct coordination_args {
-    int count;
+struct buffer_monitor {
+    struct datapoint_NanoVNAH **buffer;
     int in;
     int out;
-    pthread_cond_t remove_cond;
-    pthread_cond_t fill_cond;
+    int count;
+    int complete;
+    pthread_cond_t add_cond;
+    pthread_cond_t take_cond;
     pthread_mutex_t lock;
 };
 
-extern volatile atomic_int complete;
-
+/*
+ * Producer thread arguments
+ */
 struct scan_producer_args {
     int vna_id;
     struct sp_port *serial_port;
     int nbr_scans;
     int start;
     int stop;
-    int nbr_sweeps; 
-    struct datapoint_NanoVNAH **buffer;
-    struct coordination_args *thread_args;
+    int nbr_sweeps;
+    struct buffer_monitor *mtr;
 };
-void* scan_producer(void *args);
 
-struct scan_consumer_args {
-    struct datapoint_NanoVNAH **buffer;
-    struct coordination_args *thread_args;
-};
-void* scan_consumer(void *args);
-
-/**
- * Orchestrates multithreaded VNA scanning
+/*
+ * Consumer thread arguments
  */
+struct scan_consumer_args {
+    struct buffer_monitor *mtr;
+};
+
+/*
+ * Function prototypes
+ */
+
+void fatal_error_signal(int sig);
+
+struct sp_port* open_serial(const char *port_name);
+
+void configure_serial(struct sp_port *port);
+
+void close_and_reset_all();
+
+ssize_t write_command(struct sp_port *port, const char *cmd);
+
+ssize_t read_exact(struct sp_port *port, uint8_t *buffer, size_t length);
+
+int find_binary_header(struct sp_port *port, uint16_t expected_mask, uint16_t expected_points);
+
+void* scan_producer(void *arguments);
+
+void* scan_consumer(void *arguments);
+
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports);
+
+int test_connection(struct sp_port *port);
 
 #endif

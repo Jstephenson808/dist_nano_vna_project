@@ -1,28 +1,19 @@
 #include "VnaScanMultithreaded.h"
+#include <libserialport.h>
+#include <string.h>
 
-/**
- * Declaring global variables (for error handling and port consistency)
+/*
+ * Global variables
  */
 struct sp_port **SERIAL_PORTS = NULL;
-struct sp_port_config **INITIAL_PORT_SETTINGS = NULL;
 int VNA_COUNT = 0;
 
 static volatile sig_atomic_t fatal_error_in_progress = 0;
-volatile atomic_int complete = 0;
 struct timeval program_start_time;
 
-// Cross-platform timing function
-void get_current_time(struct timeval *tv) {
-#ifdef _WIN32
-    struct _timeb timebuffer;
-    _ftime(&timebuffer);
-    tv->tv_sec = (long)timebuffer.time;
-    tv->tv_usec = timebuffer.millitm * 1000;
-#else
-    gettimeofday(tv, NULL);
-#endif
-}
-
+/*
+ * Fatal error / SIGINT handler
+ */
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
         raise(sig);
@@ -30,8 +21,7 @@ void fatal_error_signal(int sig) {
     fatal_error_in_progress = 1;
 
     close_and_reset_all();
-    free(INITIAL_PORT_SETTINGS);
-    INITIAL_PORT_SETTINGS = NULL;
+
     free(SERIAL_PORTS);
     SERIAL_PORTS = NULL;
 
@@ -39,430 +29,393 @@ void fatal_error_signal(int sig) {
     raise(sig);
 }
 
-/**
- * Opens a serial port
+/*
+ * Open serial port using libserialport
  */
-struct sp_port* open_serial(const char *port) {
-    struct sp_port *sp;
-    
-    if (sp_get_port_by_name(port, &sp) != SP_OK) {
-        fprintf(stderr, "Error finding serial port %s\n", port);
+struct sp_port* open_serial(const char *port_name) {
+    struct sp_port *port;
+
+    if (sp_get_port_by_name(port_name, &port) != SP_OK) {
+        fprintf(stderr, "Error: could not find serial port %s\n", port_name);
         return NULL;
     }
-    
-    if (sp_open(sp, SP_MODE_READ_WRITE) != SP_OK) {
-        fprintf(stderr, "Error opening serial port %s: %s\n", port, sp_last_error_message());
-        sp_free_port(sp);
+
+    if (sp_open(port, SP_MODE_READ_WRITE) != SP_OK) {
+        fprintf(stderr, "Error: failed to open serial port %s\n", port_name);
+        sp_free_port(port);
         return NULL;
     }
-    
-    return sp;
+
+    return port;
 }
 
-/**
- * Configures serial port settings for NanoVNA communication
+/*
+ * Configure serial port for NanoVNA
  */
-struct sp_port_config* configure_serial(struct sp_port *port) {
-    // Save initial settings
-    struct sp_port_config *initial_config;
-    sp_new_config(&initial_config);
-    sp_get_config(port, initial_config);
-    
-    // Configure port: 115200 baud, 8N1, no flow control
+void configure_serial(struct sp_port *port) {
     sp_set_baudrate(port, 115200);
     sp_set_bits(port, 8);
     sp_set_parity(port, SP_PARITY_NONE);
     sp_set_stopbits(port, 1);
     sp_set_flowcontrol(port, SP_FLOWCONTROL_NONE);
-    
-    return initial_config;
+
+    #ifdef __linux__
+    sp_set_read_timeout(port, 1000);
+    sp_set_write_timeout(port, 1000);
+    #endif
+
+
 }
 
-/**
- * Restores serial port to original settings
- */
-void restore_serial(struct sp_port *port, struct sp_port_config *settings) {
-    if (settings != NULL) {
-        sp_set_config(port, settings);
-        sp_free_config(settings);
-    }
-}
-
-/**
- * Closes all serial ports and restores their initial settings
+/*
+ * Close and cleanup serial ports
  */
 void close_and_reset_all() {
-    for (int i = VNA_COUNT-1; i >= 0; i--) {
-        restore_serial(SERIAL_PORTS[i], INITIAL_PORT_SETTINGS[i]);
+    for (int i = VNA_COUNT - 1; i >= 0; i--) {
         sp_close(SERIAL_PORTS[i]);
         sp_free_port(SERIAL_PORTS[i]);
         VNA_COUNT--;
     }
 }
 
-/**
- * Writes a command to the serial port with error checking
+/*
+ * Write command using libserialport
  */
 ssize_t write_command(struct sp_port *port, const char *cmd) {
-    size_t cmd_len = strlen(cmd);
-    enum sp_return result = sp_blocking_write(port, cmd, cmd_len, 1000);
-    
-    if (result < 0) {
-        fprintf(stderr, "Error writing to port: %s\n", sp_last_error_message());
+    int len = strlen(cmd);
+    int n = sp_blocking_write(port, cmd, len, 1000);
+
+    if (n < 0) {
+        fprintf(stderr, "Error writing to serial: %s\n", sp_last_error_message());
         return -1;
-    } else if (result < (int)cmd_len) {
-        fprintf(stderr, "Warning: Partial write (%d of %zu bytes)\n", result, cmd_len);
     }
-    
-    return result;
+    return n;
 }
 
-/**
- * Reads exact number of bytes from serial port
- * Handles partial reads by continuing until all bytes are received
+/*
+ * Read an exact number of bytes
  */
 ssize_t read_exact(struct sp_port *port, uint8_t *buffer, size_t length) {
-    size_t bytes_read = 0;
-    
-    while (bytes_read < length) {
-        enum sp_return result = sp_blocking_read(port, buffer + bytes_read, 
-                                                  length - bytes_read, 2000);
-        
-        if (result < 0) {
-            fprintf(stderr, "Error reading from port: %s\n", sp_last_error_message());
+    size_t total = 0;
+
+    while (total < length) {
+        int n = sp_blocking_read(port, buffer + total, length - total, 1000);
+
+        if (n < 0) {
+            fprintf(stderr, "Serial read error: %s\n", sp_last_error_message());
             return -1;
-        } else if (result == 0) {
-            // Timeout
-            if (bytes_read > 0) {
-                fprintf(stderr, "Timeout: only read %zu of %zu bytes\n", bytes_read, length);
-            }
-            return bytes_read;
         }
-        
-        bytes_read += result;
+        if (n == 0) {
+            /* timeout */
+            return total;
+        }
+
+        total += n;
     }
-    
-    return bytes_read;
+
+    return total;
 }
 
-/**
- * Finds the binary header in the serial stream
- * Scans byte-by-byte looking for the header pattern (mask + points)
- * 
- * ORIGINAL ALGORITHM - Minimal changes from Linux version
+/*
+ * Find binary header
  */
 int find_binary_header(struct sp_port *port, uint16_t expected_mask, uint16_t expected_points) {
     uint8_t window[4] = {0};
     int max_bytes = 500;
-    
-    // Read initial 4 bytes
+
     if (read_exact(port, window, 4) != 4) {
         fprintf(stderr, "Failed to read initial header bytes\n");
         return -1;
     }
-    
-    // Check if we already have the header
+
     uint16_t mask = window[0] | (window[1] << 8);
     uint16_t points = window[2] | (window[3] << 8);
+
     if (mask == expected_mask && points == expected_points) {
         return 1;
     }
-    
-    // Scan through the stream byte by byte (ORIGINAL APPROACH)
+
     for (int i = 4; i < max_bytes; i++) {
         uint8_t byte;
-        enum sp_return result = sp_blocking_read(port, &byte, 1, 1000);
-        
-        if (result < 0) {
-            fprintf(stderr, "Error reading header byte: %s\n", sp_last_error_message());
+        int n = sp_blocking_read(port, &byte, 1, 1000);
+
+        if (n < 0) {
+            fprintf(stderr, "Error reading header: %s\n", sp_last_error_message());
             return -1;
-        } else if (result == 0) {
-            fprintf(stderr, "Timeout waiting for binary header\n");
+        }
+        if (n == 0) {
+            fprintf(stderr, "Timeout waiting for header\n");
             return 0;
         }
-        
-        // Shift window
+
         window[0] = window[1];
         window[1] = window[2];
         window[2] = window[3];
         window[3] = byte;
-        
-        // Check for header match
+
         mask = window[0] | (window[1] << 8);
         points = window[2] | (window[3] << 8);
-        
+
         if (mask == expected_mask && points == expected_points) {
-            return 1;  // Found header
+            return 1;
         }
     }
-    
-    fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
+
+    fprintf(stderr, "Binary header not found\n");
     return 0;
 }
 
+/*
+ * Producer thread
+ */
 void* scan_producer(void *arguments) {
-    struct scan_producer_args *args = (struct scan_producer_args*)arguments;
-    struct timeval send_time, recieve_time;
+    struct scan_producer_args *args = (struct scan_producer_args*) arguments;
+
+    struct timeval send_time, receive_time;
 
     for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
         if (args->nbr_sweeps > 1) {
             printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
         }
+
         int total_scans = args->nbr_scans;
         int step = (args->stop - args->start) / total_scans;
         int current = args->start;
-        
+
         while (total_scans > 0) {
-            // Send scan command
-            get_current_time(&send_time);
-            char msg_buff[50];
-            snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
-                    current, (int)round(current + step), POINTS, MASK);
-            
-            if (write_command(args->serial_port, msg_buff) < 0) {
+            gettimeofday(&send_time, NULL);
+
+            char msg_buf[50];
+            snprintf(msg_buf, sizeof(msg_buf), "scan %d %d %i %i\r",
+                current, (int)round(current + step), POINTS, MASK);
+
+            if (write_command(args->serial_port, msg_buf) < 0) {
                 fprintf(stderr, "Failed to send scan command\n");
                 return NULL;
             }
-            
-            // Give device time to prepare (helps with reliability)
-            #ifdef _WIN32
-                Sleep(150);
-            #else
-                usleep(150000);
-            #endif
-            
-            // Flush any echo or stale data
-            sp_flush(args->serial_port, SP_BUF_INPUT);
 
-            // Find binary header in response
             int header_found = find_binary_header(args->serial_port, MASK, POINTS);
             if (header_found != 1) {
-                fprintf(stderr, "Failed to find binary header\n");
+                fprintf(stderr, "Binary header not found\n");
                 return NULL;
             }
 
-            // Receive data points
             struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH));
             if (!data) {
-                fprintf(stderr, "Failed to allocate memory for data points\n");
+                fprintf(stderr, "Allocation failure\n");
                 return NULL;
             }
 
             for (int i = 0; i < POINTS; i++) {
-                // Read raw data (20 bytes from NanoVNA)
-                ssize_t bytes_read = read_exact(args->serial_port, 
-                                                (uint8_t*)&data->point[i], 
-                                                sizeof(struct nanovna_raw_datapoint));
-                
-                if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
-                    fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
-                            i, bytes_read, sizeof(struct nanovna_raw_datapoint));
+                ssize_t br = read_exact(args->serial_port,
+                    (uint8_t*)&data->point[i],
+                    sizeof(struct nanovna_raw_datapoint));
+
+                if (br != sizeof(struct nanovna_raw_datapoint)) {
+                    fprintf(stderr, "Data point read error\n");
                     free(data);
                     return NULL;
                 }
             }
 
-            // Set VNA ID and timestamps
             data->vna_id = args->vna_id;
-            get_current_time(&recieve_time);
+            gettimeofday(&receive_time, NULL);
             data->send_time = send_time;
-            data->recieve_time = recieve_time;
+            data->recieve_time = receive_time;
 
-            // Add to buffer
-            pthread_mutex_lock(&args->thread_args->lock);
-            while (args->thread_args->count == N) {
-                pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
+            pthread_mutex_lock(&args->mtr->lock);
+            while (args->mtr->count == N) {
+                pthread_cond_wait(&args->mtr->take_cond, &args->mtr->lock);
             }
-            args->buffer[args->thread_args->in] = data;
-            args->thread_args->in = (args->thread_args->in+1) % N;
-            args->thread_args->count++;
-            pthread_cond_signal(&args->thread_args->fill_cond);
-            pthread_mutex_unlock(&args->thread_args->lock);
 
-            // Finish loop
+            args->mtr->buffer[args->mtr->in] = data;
+            args->mtr->in = (args->mtr->in + 1) % N;
+            args->mtr->count++;
+
+            pthread_cond_signal(&args->mtr->add_cond);
+            pthread_mutex_unlock(&args->mtr->lock);
+
             total_scans--;
             current += step;
-        }       
+        }
     }
-    
-    pthread_mutex_lock(&args->thread_args->lock);
-    complete++;
-    pthread_cond_broadcast(&args->thread_args->fill_cond);
-    pthread_mutex_unlock(&args->thread_args->lock);
+
+    pthread_mutex_lock(&args->mtr->lock);
+    args->mtr->complete++;
+    pthread_cond_broadcast(&args->mtr->add_cond);
+    pthread_mutex_unlock(&args->mtr->lock);
 
     return NULL;
 }
 
+/*
+ * Consumer thread
+ */
 void* scan_consumer(void *arguments) {
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
+
     int total_count = 0;
 
-    while (complete < VNA_COUNT || (args->thread_args->count != 0)) {
-        pthread_mutex_lock(&args->thread_args->lock);
-        while (args->thread_args->count == 0 && complete < VNA_COUNT) {
-            pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
+    while (args->mtr->complete < VNA_COUNT || args->mtr->count > 0) {
+        pthread_mutex_lock(&args->mtr->lock);
+
+        while (args->mtr->count == 0 && args->mtr->complete < VNA_COUNT) {
+            pthread_cond_wait(&args->mtr->add_cond, &args->mtr->lock);
         }
 
-        struct datapoint_NanoVNAH *data = args->buffer[args->thread_args->out];
-        args->buffer[args->thread_args->out] = NULL;
-        args->thread_args->out = (args->thread_args->out + 1) % N;
-        args->thread_args->count--;
-        pthread_cond_signal(&args->thread_args->remove_cond);
-        pthread_mutex_unlock(&args->thread_args->lock);
+        if (args->mtr->count == 0) {
+            pthread_mutex_unlock(&args->mtr->lock);
+            break;
+        }
+
+        struct datapoint_NanoVNAH *data = args->mtr->buffer[args->mtr->out];
+        args->mtr->buffer[args->mtr->out] = NULL;
+
+        args->mtr->out = (args->mtr->out + 1) % N;
+        args->mtr->count--;
+
+        pthread_cond_signal(&args->mtr->take_cond);
+        pthread_mutex_unlock(&args->mtr->lock);
 
         for (int i = 0; i < POINTS; i++) {
-            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
-                   data->vna_id, total_count,
-                   ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + 
-                    (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec) + 
-                    (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   data->point[i].frequency, 
-                   data->point[i].s11.re, data->point[i].s11.im, 
-                   data->point[i].s21.re, data->point[i].s21.im);
+            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n",
+                data->vna_id, total_count,
+                ((double)(data->send_time.tv_sec - program_start_time.tv_sec)
+                + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1e6),
+                ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec)
+                + (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1e6),
+                data->point[i].frequency,
+                data->point[i].s11.re, data->point[i].s11.im,
+                data->point[i].s21.re, data->point[i].s21.im);
+
             total_count++;
         }
 
         free(data);
-        data = NULL;
     }
+
     return NULL;
 }
 
+/*
+ * Main scan controller
+ */
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports) {
-    // Reset VNA_COUNT for clean state
     VNA_COUNT = 0;
-    
-    // Initialise global variables
+
     SERIAL_PORTS = calloc(num_vnas, sizeof(struct sp_port*));
-    INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct sp_port_config*));
-    
-    if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
-        fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
-        if (SERIAL_PORTS) {free(SERIAL_PORTS); SERIAL_PORTS = NULL;}
-        if (INITIAL_PORT_SETTINGS) {free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;}
+    if (!SERIAL_PORTS) {
+        fprintf(stderr, "Failed to allocate SERIAL_PORTS\n");
         return;
     }
 
-    get_current_time(&program_start_time);
+    gettimeofday(&program_start_time, NULL);
 
-    // Create buffer
-    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH*)*(N+1));
+    struct datapoint_NanoVNAH **buffer =
+        malloc(sizeof(struct datapoint_NanoVNAH*) * (N + 1));
+
     if (!buffer) {
-        fprintf(stderr, "Failed to allocate buffer memory\n");
-        free(SERIAL_PORTS); SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
+        fprintf(stderr, "Failed to allocate buffer\n");
+        free(SERIAL_PORTS);
+        SERIAL_PORTS = NULL;
         return;
     }
-    
-    struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
-    complete = 0;
+
+    struct buffer_monitor monitor = {
+        .buffer = buffer,
+        .in = 0,
+        .out = 0,
+        .count = 0,
+        .complete = 0,
+        .add_cond = PTHREAD_COND_INITIALIZER,
+        .take_cond = PTHREAD_COND_INITIALIZER,
+        .lock = PTHREAD_MUTEX_INITIALIZER
+    };
 
     int error;
-
-    // Create producer threads
-    struct scan_producer_args arguments[num_vnas];
+    struct scan_producer_args producer_args[num_vnas];
     pthread_t producers[num_vnas];
-    
-    for(int i = 0; i < num_vnas; i++) {
-        // Open serial port
+
+    for (int i = 0; i < num_vnas; i++) {
         SERIAL_PORTS[i] = open_serial(ports[i]);
-        if (SERIAL_PORTS[i] == NULL) {
-            fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
-            // Clean up already opened ports
+        if (!SERIAL_PORTS[i]) {
+            fprintf(stderr, "Failed to open port for VNA %d\n", i);
+
             for (int j = 0; j < i; j++) {
-                restore_serial(SERIAL_PORTS[j], INITIAL_PORT_SETTINGS[j]);
                 sp_close(SERIAL_PORTS[j]);
                 sp_free_port(SERIAL_PORTS[j]);
             }
-            free(buffer); buffer = NULL;
-            free(SERIAL_PORTS); SERIAL_PORTS = NULL;
-            free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
+
+            free(buffer);
+            free(SERIAL_PORTS);
+            SERIAL_PORTS = NULL;
             return;
         }
-        
-        // Configure serial port and save original settings
-        INITIAL_PORT_SETTINGS[i] = configure_serial(SERIAL_PORTS[i]);
+
+        configure_serial(SERIAL_PORTS[i]);
         VNA_COUNT++;
 
-        arguments[i].vna_id = i;
-        arguments[i].serial_port = SERIAL_PORTS[i];
-        arguments[i].nbr_scans = nbr_scans;
-        arguments[i].start = start;
-        arguments[i].stop = stop;
-        arguments[i].nbr_sweeps = nbr_sweeps;
-        arguments[i].buffer = buffer;
-        arguments[i].thread_args = &thread_args;
+        producer_args[i].vna_id = i;
+        producer_args[i].serial_port = SERIAL_PORTS[i];
+        producer_args[i].nbr_scans = nbr_scans;
+        producer_args[i].start = start;
+        producer_args[i].stop = stop;
+        producer_args[i].nbr_sweeps = nbr_sweeps;
+        producer_args[i].mtr = &monitor;
 
-        error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
-        if(error != 0){
+        error = pthread_create(&producers[i], NULL, scan_producer, &producer_args[i]);
+        if (error != 0) {
             fprintf(stderr, "Error creating producer thread %d\n", i);
             return;
         }
     }
 
-    // Create consumer thread
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {buffer, &thread_args};
-    error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
-    if(error != 0){
+    struct scan_consumer_args consumer_args = { .mtr = &monitor };
+
+    error = pthread_create(&consumer, NULL, scan_consumer, &consumer_args);
+    if (error != 0) {
         fprintf(stderr, "Error creating consumer thread\n");
-        free(buffer); buffer = NULL;
-        free(SERIAL_PORTS); SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
         return;
     }
 
-    // Wait for threads to finish
-    for(int i = 0; i < num_vnas; i++) {
-        error = pthread_join(producers[i], NULL);
-        if(error != 0){
-            fprintf(stderr, "Error joining producer %d\n", i);
-            return;
-        }
+    for (int i = 0; i < num_vnas; i++) {
+        pthread_join(producers[i], NULL);
     }
 
-    error = pthread_join(consumer, NULL);
-    if(error != 0){
-        fprintf(stderr, "Error joining consumer\n");
-        return;
-    }
+    pthread_join(consumer, NULL);
 
-    // Cleanup
     free(buffer);
-    buffer = NULL;
 
     close_and_reset_all();
     free(SERIAL_PORTS);
     SERIAL_PORTS = NULL;
-    free(INITIAL_PORT_SETTINGS);
-    INITIAL_PORT_SETTINGS = NULL;
-
-    return;
 }
 
-/**
- * Helper function. Issues info command and prints output
+/*
+ * Simple connection test using libserialport
  */
 int test_connection(struct sp_port *port) {
-    char buffer[32];
-    const char *msg = "info\r";
-    
-    if (write_command(port, msg) < 0) {
+    char buffer[64];
+
+    if (write_command(port, "info\r") < 0) {
         fprintf(stderr, "Failed to send info command\n");
         return 1;
     }
 
-    int numBytes;
+    int n;
     do {
-        numBytes = sp_blocking_read(port, buffer, 31, 1000);
-        if (numBytes < 0) {
-            fprintf(stderr, "Error reading: %s\n", sp_last_error_message());
+        n = sp_blocking_read(port, buffer, 63, 1000);
+
+        if (n < 0) {
+            fprintf(stderr, "Read error: %s\n", sp_last_error_message());
             return 1;
         }
-        buffer[numBytes] = '\0';
+
+        buffer[n] = '\0';
         printf("%s", buffer);
-    } while (numBytes > 0 && !strstr(buffer, "ch>"));
+
+    } while (n > 0 && !strstr(buffer, "ch>"));
 
     return 0;
 }
