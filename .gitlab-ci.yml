@@ -14,7 +14,7 @@ build_scanner:
   script:
     - cd src/VnaScanC
     - make clean
-    - make CC=gcc  # Use gcc instead of clang in CI
+    - make scan-multithreaded CC=gcc 
   artifacts:
     paths:
       - src/VnaScanC/VnaScanMultithreaded
@@ -24,9 +24,8 @@ build_tests:
   stage: build
   image: gcc:latest
   script:
-    - cd test/TestVnaScanC
-    - make clean
-    - make CC=gcc  # Use gcc instead of clang in CI
+    - cd src/VnaScanC
+    - make scan-multithreaded-test CC=gcc  
   artifacts:
     paths:
       - test/TestVnaScanC/TestVnaScanMultithreaded
