@@ -20,17 +20,18 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ```
 ├── README.md
 ├── src/                                    # Main project directory
-│   ├── VnaScanC/                           
-│   │   ├── Makefile                        # Build configuration
-│   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
-│   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
-│   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
-│   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
-│   └── VnaScanPython/
-│       └── VnaScan.py                      # Prototype: initial Python implementation
+│   ├── VnaScanC/                           
+│   │   ├── Makefile                        # Build configuration
+│   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
+│   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
+│   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
+│   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
+│   └── VnaScanPython/
+│       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
-    └── VnaScanCTest/
-        └── VnaScanMultithreadedTest.c      # Automated tests for multithreaded scanner implementation
+    ├── nanovna_emulator.py                 # Python emulator for CI/CD testing
+    └── TestVnaScanC/
+        └── TestVnaScanMultithreaded.c      # Unity tests for multithreaded scanner
 ```
 
 **Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is **`vnaScanMultithreaded.c`** and **`vnaScanMultithreaded.h`**.
