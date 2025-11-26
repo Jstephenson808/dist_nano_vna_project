@@ -12,7 +12,6 @@ struct termios* INITIAL_PORT_SETTINGS = NULL;
 int VNA_COUNT = 0;
 
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
-volatile atomic_int complete = 0;
 struct timeval program_start_time;
 
 void fatal_error_signal(int sig) {
@@ -320,15 +319,15 @@ void* scan_producer(void *arguments) {
 
             // add to buffer
 
-            pthread_mutex_lock(&args->thread_args->lock);
-            while (args->thread_args->count == N) {
-                pthread_cond_wait(&args->thread_args->remove_cond, &args->thread_args->lock);
+            pthread_mutex_lock(&args->mtr->lock);
+            while (args->mtr->count == N) {
+                pthread_cond_wait(&args->mtr->take_cond, &args->mtr->lock);
             }
-            args->buffer[args->thread_args->in] = data;
-            args->thread_args->in = (args->thread_args->in+1) % N;
-            args->thread_args->count++;
-            pthread_cond_signal(&args->thread_args->fill_cond);
-            pthread_mutex_unlock(&args->thread_args->lock);
+            args->mtr->buffer[args->mtr->in] = data;
+            args->mtr->in = (args->mtr->in+1) % N;
+            args->mtr->count++;
+            pthread_cond_signal(&args->mtr->add_cond);
+            pthread_mutex_unlock(&args->mtr->lock);
 
             // finish loop
 
@@ -336,10 +335,10 @@ void* scan_producer(void *arguments) {
             current += step;
         }       
     }
-    pthread_mutex_lock(&args->thread_args->lock);
-    complete++;
-    pthread_cond_broadcast(&args->thread_args->fill_cond); // Use broadcast for multiple consumers
-    pthread_mutex_unlock(&args->thread_args->lock);
+    pthread_mutex_lock(&args->mtr->lock);
+    args->mtr->complete++;
+    pthread_cond_broadcast(&args->mtr->add_cond); // Use broadcast for multiple consumers
+    pthread_mutex_unlock(&args->mtr->lock);
 
     return NULL;
 }
@@ -349,18 +348,18 @@ void* scan_consumer(void *arguments) {
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
 
-    while (complete < VNA_COUNT || (args->thread_args->count != 0)) {
-        pthread_mutex_lock(&args->thread_args->lock);
-        while (args->thread_args->count == 0 && complete < VNA_COUNT) {
-            pthread_cond_wait(&args->thread_args->fill_cond, &args->thread_args->lock);
+    while (args->mtr->complete < VNA_COUNT || (args->mtr->count != 0)) {
+        pthread_mutex_lock(&args->mtr->lock);
+        while (args->mtr->count == 0 && args->mtr->complete < VNA_COUNT) {
+            pthread_cond_wait(&args->mtr->add_cond, &args->mtr->lock);
         }
 
-        struct datapoint_NanoVNAH *data = args->buffer[args->thread_args->out];
-        args->buffer[args->thread_args->out] = NULL;
-        args->thread_args->out = (args->thread_args->out + 1) % N;
-        args->thread_args->count--;
-        pthread_cond_signal(&args->thread_args->remove_cond);
-        pthread_mutex_unlock(&args->thread_args->lock);
+        struct datapoint_NanoVNAH *data = args->mtr->buffer[args->mtr->out];
+        args->mtr->buffer[args->mtr->out] = NULL;
+        args->mtr->out = (args->mtr->out + 1) % N;
+        args->mtr->count--;
+        pthread_cond_signal(&args->mtr->take_cond);
+        pthread_mutex_unlock(&args->mtr->lock);
 
         for (int i = 0; i < POINTS; i++) {
             printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
@@ -405,8 +404,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         return;
     }
     
-    struct coordination_args thread_args = {0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
-    complete = 0;
+    struct buffer_monitor monitor = {buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
 
     int error;
 
@@ -439,8 +437,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].nbr_sweeps = nbr_sweeps;
-        arguments[i].buffer = buffer;
-        arguments[i].thread_args = &thread_args;
+        arguments[i].mtr = &monitor;
 
         error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
         if(error != 0){
@@ -450,7 +447,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {buffer,&thread_args};
+    struct scan_consumer_args consumer_args = {&monitor};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));

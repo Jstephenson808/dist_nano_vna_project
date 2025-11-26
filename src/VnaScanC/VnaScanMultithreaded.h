@@ -138,18 +138,18 @@ void fatal_error_signal(int sig);
 //------------------------
 
 /**
- * Coordination variables for multithreading
+ * Struct used for shared buffer and concurrency variables
  */
-struct coordination_args {
+struct buffer_monitor {
+    struct datapoint_NanoVNAH **buffer;
     int count;
     int in;
     int out;
-    pthread_cond_t remove_cond;
-    pthread_cond_t fill_cond;
+    atomic_int complete;
+    pthread_cond_t take_cond;
+    pthread_cond_t add_cond;
     pthread_mutex_t lock;
 };
-// flag for when the consumer has no more to read. Currently no support for multiple consumers.
-extern volatile atomic_int complete;
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -167,8 +167,7 @@ struct scan_producer_args {
     int start;
     int stop;
     int nbr_sweeps; 
-    struct datapoint_NanoVNAH **buffer;
-    struct coordination_args *thread_args;
+    struct buffer_monitor *mtr;
 };
 void* scan_producer(void *args);
 
@@ -181,8 +180,7 @@ void* scan_producer(void *args);
  * @param args pointer to struct scan_consumer_args
  */
 struct scan_consumer_args {
-    struct datapoint_NanoVNAH **buffer;
-    struct coordination_args *thread_args;
+    struct buffer_monitor *mtr;
 };
 void* scan_consumer(void *args);
 

@@ -1,7 +1,7 @@
 #include "VnaScanMultithreaded.h"
 #include "unity.h"
 
-#define UNITY_INCLUDE_CONFIG_
+#define UNITY_INCLUDE_CONFIG_H
 
 void setUp(void) {
     /* This is run before EACH TEST */
