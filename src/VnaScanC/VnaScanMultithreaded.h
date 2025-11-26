@@ -138,9 +138,9 @@ void fatal_error_signal(int sig);
 //------------------------
 
 /**
- * Struct used for shared buffer and concurrency variables
+ * Struct and functions used for shared buffer and concurrency variables
  */
-struct buffer_monitor {
+typedef struct BoundedBuffer {
     struct datapoint_NanoVNAH **buffer;
     int count;
     int in;
@@ -149,7 +149,12 @@ struct buffer_monitor {
     pthread_cond_t take_cond;
     pthread_cond_t add_cond;
     pthread_mutex_t lock;
-};
+} BoundedBuffer;
+
+BoundedBuffer create_bounded_buffer(int size);
+void destroy_bounded_buffer(BoundedBuffer *buffer);
+void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data);
+struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -167,7 +172,7 @@ struct scan_producer_args {
     int start;
     int stop;
     int nbr_sweeps; 
-    struct buffer_monitor *mtr;
+    BoundedBuffer *bfr;
 };
 void* scan_producer(void *args);
 
@@ -180,7 +185,7 @@ void* scan_producer(void *args);
  * @param args pointer to struct scan_consumer_args
  */
 struct scan_consumer_args {
-    struct buffer_monitor *mtr;
+    BoundedBuffer *bfr;
 };
 void* scan_consumer(void *args);
 

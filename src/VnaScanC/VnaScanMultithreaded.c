@@ -256,6 +256,53 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
     fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
     return 0;
 }
+/**
+ * Bounded Buffer handling functions (do not access bounded buffer otherwise)
+ */
+BoundedBuffer create_bounded_buffer(int size) {
+    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(size+1));
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate buffer memory\n");
+        free(SERIAL_PORTS);SERIAL_PORTS=NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS=NULL;
+        raise(12);
+    }
+    BoundedBuffer bb = {buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
+    return bb;
+}
+
+void destroy_bounded_buffer(BoundedBuffer *buffer) {
+    free(buffer->buffer);
+    buffer->buffer = NULL;
+    // also free BoundedBuffer if it is malloced (it is not currently)
+}
+
+void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data) {
+    pthread_mutex_lock(&buffer->lock);
+    while (buffer->count == N) {
+        pthread_cond_wait(&buffer->take_cond, &buffer->lock);
+    }
+    buffer->buffer[buffer->in] = data;
+    buffer->in = (buffer->in+1) % N;
+    buffer->count++;
+    pthread_cond_signal(&buffer->add_cond);
+    pthread_mutex_unlock(&buffer->lock);
+    return;
+}
+
+struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
+    pthread_mutex_lock(&buffer->lock);
+    while (buffer->count == 0 && buffer->complete < VNA_COUNT) {
+        pthread_cond_wait(&buffer->add_cond, &buffer->lock);
+    }
+    struct datapoint_NanoVNAH *data = buffer->buffer[buffer->out];
+    buffer->buffer[buffer->out] = NULL;
+    buffer->out = (buffer->out + 1) % N;
+    buffer->count--;
+    pthread_cond_signal(&buffer->take_cond);
+    pthread_mutex_unlock(&buffer->lock);
+    return data;
+}
 
 void* scan_producer(void *arguments) {
 
@@ -318,28 +365,14 @@ void* scan_producer(void *arguments) {
             data->recieve_time = recieve_time;
 
             // add to buffer
-
-            pthread_mutex_lock(&args->mtr->lock);
-            while (args->mtr->count == N) {
-                pthread_cond_wait(&args->mtr->take_cond, &args->mtr->lock);
-            }
-            args->mtr->buffer[args->mtr->in] = data;
-            args->mtr->in = (args->mtr->in+1) % N;
-            args->mtr->count++;
-            pthread_cond_signal(&args->mtr->add_cond);
-            pthread_mutex_unlock(&args->mtr->lock);
+            add_buff(args->bfr,data);
 
             // finish loop
-
             total_scans--;
             current += step;
         }       
     }
-    pthread_mutex_lock(&args->mtr->lock);
-    args->mtr->complete++;
-    pthread_cond_broadcast(&args->mtr->add_cond); // Use broadcast for multiple consumers
-    pthread_mutex_unlock(&args->mtr->lock);
-
+    args->bfr->complete++;
     return NULL;
 }
 
@@ -348,18 +381,9 @@ void* scan_consumer(void *arguments) {
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
 
-    while (args->mtr->complete < VNA_COUNT || (args->mtr->count != 0)) {
-        pthread_mutex_lock(&args->mtr->lock);
-        while (args->mtr->count == 0 && args->mtr->complete < VNA_COUNT) {
-            pthread_cond_wait(&args->mtr->add_cond, &args->mtr->lock);
-        }
+    while (args->bfr->complete < VNA_COUNT || (args->bfr->count != 0)) {
 
-        struct datapoint_NanoVNAH *data = args->mtr->buffer[args->mtr->out];
-        args->mtr->buffer[args->mtr->out] = NULL;
-        args->mtr->out = (args->mtr->out + 1) % N;
-        args->mtr->count--;
-        pthread_cond_signal(&args->mtr->take_cond);
-        pthread_mutex_unlock(&args->mtr->lock);
+        struct datapoint_NanoVNAH *data = take_buff(args->bfr);
 
         for (int i = 0; i < POINTS; i++) {
             printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
@@ -396,18 +420,9 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     gettimeofday(&program_start_time, NULL);
 
     // Create consumer and producer threads
-    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(N+1));
-    if (!buffer) {
-        fprintf(stderr, "Failed to allocate buffer memory\n");
-        free(SERIAL_PORTS);SERIAL_PORTS=NULL;
-        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS=NULL;
-        return;
-    }
-    
-    struct buffer_monitor monitor = {buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
+    BoundedBuffer bounded_buffer = create_bounded_buffer(N);
 
     int error;
-
     // warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
@@ -421,7 +436,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
                 restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
                 close(SERIAL_PORTS[j]);
             }
-            free(buffer);buffer = NULL;
+            free(bounded_buffer.buffer);bounded_buffer.buffer = NULL;
             free(SERIAL_PORTS);SERIAL_PORTS = NULL;
             free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
@@ -437,7 +452,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].nbr_sweeps = nbr_sweeps;
-        arguments[i].mtr = &monitor;
+        arguments[i].bfr = &bounded_buffer;
 
         error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
         if(error != 0){
@@ -447,11 +462,11 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {&monitor};
+    struct scan_consumer_args consumer_args = {&bounded_buffer};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        free(buffer);buffer = NULL;
+        free(bounded_buffer.buffer);bounded_buffer.buffer = NULL;
         free(SERIAL_PORTS);SERIAL_PORTS = NULL;
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
@@ -468,8 +483,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     if(error != 0){printf("Error %i from join consumer:\n", errno);return;}
 
     // finish up
-    free(buffer);
-    buffer = NULL;
+    destroy_bounded_buffer(&bounded_buffer);
 
     close_and_reset_all();
     free(SERIAL_PORTS);

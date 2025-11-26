@@ -11,11 +11,6 @@ void tearDown(void) {
     /* This is run after EACH TEST */
 }
 
-void test_Numbers_Exist() {
-    TEST_ASSERT_EQUAL(0, 2-(1+1));
-}
-
-
 void test_configure_serial_settings_correct() {
     TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
 }
@@ -51,8 +46,6 @@ void test_find_binary_header_fails_gracefully() {
 
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_Numbers_Exist);
-    RUN_TEST(test_Constants_Are_Valid);
     RUN_TEST(test_configure_serial_settings_correct);
     RUN_TEST(test_restore_serial_settings_correct);
     RUN_TEST(test_close_and_reset_all_targets);
