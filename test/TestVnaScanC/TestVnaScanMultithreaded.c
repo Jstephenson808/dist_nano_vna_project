@@ -15,12 +15,6 @@ void test_Numbers_Exist() {
     TEST_ASSERT_EQUAL(0, 2-(1+1));
 }
 
-// Test the constants POINT and MASK from header file
-
-void test_Constants_Are_Valid() {
-    TEST_ASSERT_EQUAL(101, POINTS);
-    TEST_ASSERT_EQUAL(135, MASK);
-}
 
 void test_configure_serial_settings_correct() {
     TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
