@@ -308,10 +308,58 @@ struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
 /**
  * producer / consumer functions
  */
+struct datapoint_NanoVNAH* pull_scan(int port, int vnaID, int start, int stop) {
+    struct timeval send_time, recieve_time;
+    gettimeofday(&send_time, NULL);
+
+    // Send scan command
+    char msg_buff[50];
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, stop, POINTS, MASK);
+    if (write_command(port, msg_buff) < 0) {
+        fprintf(stderr, "Failed to send scan command\n");
+        return NULL;
+    }
+
+    // Find binary header in response
+    int header_found = find_binary_header(port, MASK, POINTS);
+    if (header_found != 1) {
+        fprintf(stderr, "Failed to find binary header\n");
+        return NULL;
+    }
+
+    // Receive data points
+    struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH));
+    if (!data) {
+        fprintf(stderr, "Failed to allocate memory for data points\n");
+        return NULL;
+    }
+
+    for (int i = 0; i < POINTS; i++) {
+        // Read raw data (20 bytes from NanoVNA)
+        ssize_t bytes_read = read_exact(port, 
+                                        (uint8_t*)&data->point[i], 
+                                        sizeof(struct nanovna_raw_datapoint));
+        
+        if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
+            fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
+                    i, bytes_read, sizeof(struct nanovna_raw_datapoint));
+            free(data);
+            return NULL;
+        }
+    }
+
+    // Set VNA ID (software metadata)
+    data->vna_id = vnaID;
+    // Set Timestamps
+    gettimeofday(&recieve_time, NULL);
+    data->send_time = send_time;
+    data->recieve_time = recieve_time;
+    return data;
+}
+
 void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
-    struct timeval send_time, recieve_time;
 
     for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
         if (args->nbr_sweeps > 1) {
@@ -321,55 +369,10 @@ void* scan_producer(void *arguments) {
         int step = (args->stop - args->start) / total_scans;
         int current = args->start;
         while (total_scans > 0) {
-
-            // Send scan command
-            gettimeofday(&send_time, NULL);
-            char msg_buff[50];
-            snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", 
-                    current, (int)round(current + step), POINTS, MASK);
-            
-            if (write_command(args->serial_port, msg_buff) < 0) {
-                fprintf(stderr, "Failed to send scan command\n");
-                return NULL;
-            }
-
-            // Find binary header in response
-            int header_found = find_binary_header(args->serial_port, MASK, POINTS);
-            if (header_found != 1) {
-                fprintf(stderr, "Failed to find binary header\n");
-                return NULL;
-            }
-
-            // Receive data points
-            struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH));
-            if (!data) {
-                fprintf(stderr, "Failed to allocate memory for data points\n");
-                return NULL;
-            }
-
-            for (int i = 0; i < POINTS; i++) {
-                // Read raw data (20 bytes from NanoVNA)
-                ssize_t bytes_read = read_exact(args->serial_port, 
-                                                (uint8_t*)&data->point[i], 
-                                                sizeof(struct nanovna_raw_datapoint));
-                
-                if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
-                    fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
-                            i, bytes_read, sizeof(struct nanovna_raw_datapoint));
-                    free(data);
-                    return NULL;
-                }
-            }
-
-            // Set VNA ID (software metadata)
-            data->vna_id = args->vna_id;
-            // Set Timestamps
-            gettimeofday(&recieve_time, NULL);
-            data->send_time = send_time;
-            data->recieve_time = recieve_time;
-
+            struct datapoint_NanoVNAH *data = pull_scan(args->serial_port,args->vna_id,
+                                                        current,(int)round(current + step));
             // add to buffer
-            add_buff(args->bfr,data);
+            if (data) {add_buff(args->bfr,data);}
 
             // finish loop
             total_scans--;

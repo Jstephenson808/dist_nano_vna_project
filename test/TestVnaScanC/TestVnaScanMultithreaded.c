@@ -3,6 +3,8 @@
 
 #define UNITY_INCLUDE_CONFIG_H
 
+int vna_mocked = 0;
+
 void setUp(void) {
     /* This is run before EACH TEST */
 }
@@ -15,36 +17,36 @@ void tearDown(void) {
  * Serial functions
  */
 void test_configure_serial_settings_correct() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 }
 
 void test_restore_serial_settings_correct() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 }
 
 void test_close_and_reset_all_targets() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking restore_serial");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking restore_serial");}
 }
 void test_close_and_reset_all_VNA_COUNT() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking restore_serial");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking restore_serial");}
 }
 
 void test_write_command() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 }
 
 void test_read_exact_reads_one_byte() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 }
 
 void test_find_binary_header_handles_command_prompt() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
 }
 void test_find_binary_header_handles_random_data() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
 }
 void test_find_binary_header_fails_gracefully() {
-    TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
 }
 
 /**
@@ -182,19 +184,33 @@ void test_take_buff_escapes_block_after_full() {
 /**
  * Producer & Helpers
  */
-
+void test_pull_scan_constructs_valid_data() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+}
+void test_pull_scan_nulls_malformed_data() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+}
+void test_producer_takes_correct_points() {
+    TEST_IGNORE_MESSAGE("Cannot test without mocking pull_scan()");
+}
 
 /**
  * Consumer & Helpers
  */
+void test_consumer_constructs_valid_output() {
+    TEST_IGNORE_MESSAGE("I'm honestly just not sure how to capture the write to terminal, tomorrow's job");
+}
 
 int main(int argc, char *argv[]) {
     UNITY_BEGIN();
 
     if (argc > 0) {
-
+        // args for if using python simulator or not
+        // if not, flag to skip serial tests
+        // defaults tbd
     }
     
+    // serial tests
     RUN_TEST(test_configure_serial_settings_correct);
     RUN_TEST(test_restore_serial_settings_correct);
     RUN_TEST(test_close_and_reset_all_targets);
@@ -204,6 +220,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_find_binary_header_handles_command_prompt);
     RUN_TEST(test_find_binary_header_handles_random_data);
     RUN_TEST(test_find_binary_header_fails_gracefully);
+
+    // bounded buffer tests
     RUN_TEST(test_create_bounded_buffer);
     RUN_TEST(test_destroy_bounded_buffer);
     RUN_TEST(test_add_buff_adds);
@@ -212,6 +230,12 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_take_buff_takes);
     RUN_TEST(test_take_buff_cycles);
     RUN_TEST(test_take_buff_escapes_block_after_full);
+
+    // producer/consumer tests
+    RUN_TEST(test_pull_scan_constructs_valid_data);
+    RUN_TEST(test_pull_scan_nulls_malformed_data);
+    RUN_TEST(test_producer_takes_correct_points);
+    RUN_TEST(test_consumer_constructs_valid_output);
 
     return UNITY_END();
 }
