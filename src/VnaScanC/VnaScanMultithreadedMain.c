@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
     int nbr_scans = 20;
     int nbr_sweeps = 5;
     int nbr_nanoVNAs = 1;
+    const char **ports;
 
     if (argc > 1) {
         if (argc < 6) {
@@ -72,9 +73,15 @@ int main(int argc, char *argv[]) {
     struct timeval stop, start;
     gettimeofday(&start, NULL);
 
-    // call a scan (with one nanoVNA)
-    const char **ports = (const char **)&argv[6];
+    // assign ports
+    if (argc >= 6) {
+        ports = (const char **)&argv[6];
+    }
+    else {
+        ports = (const char **)&"/dev/ttyACM0";
+    }
 
+    // call a scan
     run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, nbr_sweeps, ports);    
 
     // finish timing
