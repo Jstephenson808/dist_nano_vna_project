@@ -69,7 +69,7 @@ void test_add_buff_adds() {
     TEST_ASSERT_EQUAL_INT(0,b->in);
     TEST_ASSERT_EQUAL_INT(0,b->count);
     b->buffer[b->in] = NULL;
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     add_buff(b,data);
     TEST_ASSERT_EQUAL_INT(1,b->in);
     TEST_ASSERT_EQUAL_INT(1,b->count);
@@ -82,7 +82,7 @@ void test_add_buff_cycles() {
     create_bounded_buffer(N,b);
     b->in = N-1;
     b->buffer[b->in] = NULL;
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     add_buff(b,data);
     TEST_ASSERT_EQUAL_INT(0,b->in);
     TEST_ASSERT_NOT_NULL(b->buffer[N-1]);
@@ -91,7 +91,7 @@ void test_add_buff_cycles() {
 }
 struct thread_imitator_add_args {
     BoundedBuffer *b;
-    struct datapoint_NanoVNAH *data;
+    struct datapoint_nanoVNA_H *data;
 };
 void* thread_imitator_add(void *arguments) {
     struct thread_imitator_add_args *args = arguments;
@@ -104,7 +104,7 @@ void test_add_buff_escapes_block_after_full() {
     b->count = 5;
     b->buffer[b->in] = NULL;
 
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     struct thread_imitator_add_args args = {b,data};
     pthread_t thread;
     int error = pthread_create(&thread, NULL, &thread_imitator_add, &args);
@@ -131,10 +131,10 @@ void test_add_buff_escapes_block_after_full() {
 void test_take_buff_takes() {
     BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
     create_bounded_buffer(5,b);
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     b->buffer[b->out] = data;
     b->count = 1;
-    struct datapoint_NanoVNAH *dataOut = take_buff(b);
+    struct datapoint_nanoVNA_H *dataOut = take_buff(b);
     TEST_ASSERT_EQUAL_INT(1,b->out);
     TEST_ASSERT_EQUAL_INT(0,b->count);
     TEST_ASSERT_NOT_NULL(dataOut);
@@ -145,8 +145,8 @@ void test_take_buff_cycles() {
     BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
     create_bounded_buffer(N,b);
     b->out = N-1;
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    struct datapoint_NanoVNAH *dataOut = take_buff(b);
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
+    struct datapoint_nanoVNA_H *dataOut = take_buff(b);
     TEST_ASSERT_EQUAL_INT(0,b->out);
     TEST_ASSERT_NOT_NULL(dataOut);
     free(data);
@@ -162,7 +162,7 @@ void test_take_buff_escapes_block_after_full() {
     create_bounded_buffer(5,b);
     b->count = 0;
 
-    struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     b->buffer[b->out] = data;
 
     pthread_t thread;

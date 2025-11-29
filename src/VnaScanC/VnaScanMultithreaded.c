@@ -263,7 +263,7 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
  * Bounded Buffer handling functions (do not access bounded buffer otherwise)
  */
 int create_bounded_buffer(int size, BoundedBuffer *bb) {
-    struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(size+1));
+    struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*(size+1));
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
         /*
@@ -283,7 +283,7 @@ void destroy_bounded_buffer(BoundedBuffer *buffer) {
     buffer = NULL;
 }
 
-void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data) {
+void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == N) {
         pthread_cond_wait(&buffer->take_cond, &buffer->lock);
@@ -296,12 +296,12 @@ void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data) {
     return;
 }
 
-struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
+struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == 0 && buffer->complete < VNA_COUNT) {
         pthread_cond_wait(&buffer->add_cond, &buffer->lock);
     }
-    struct datapoint_NanoVNAH *data = buffer->buffer[buffer->out];
+    struct datapoint_nanoVNA_H *data = buffer->buffer[buffer->out];
     buffer->buffer[buffer->out] = NULL;
     buffer->out = (buffer->out + 1) % N;
     buffer->count--;
@@ -313,7 +313,7 @@ struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
 /**
  * producer / consumer functions
  */
-struct datapoint_NanoVNAH* pull_scan(int port, int vnaID, int start, int stop) {
+struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) {
     struct timeval send_time, receive_time;
     gettimeofday(&send_time, NULL);
 
@@ -333,7 +333,7 @@ struct datapoint_NanoVNAH* pull_scan(int port, int vnaID, int start, int stop) {
     }
 
     // Receive data points
-    struct datapoint_NanoVNAH *data = malloc(sizeof(struct datapoint_NanoVNAH));
+    struct datapoint_nanoVNA_H *data = malloc(sizeof(struct datapoint_nanoVNA_H));
     if (!data) {
         fprintf(stderr, "Failed to allocate memory for data points\n");
         return NULL;
@@ -374,7 +374,7 @@ void* scan_producer(void *arguments) {
         int step = (args->stop - args->start) / total_scans;
         int current = args->start;
         while (total_scans > 0) {
-            struct datapoint_NanoVNAH *data = pull_scan(args->serial_port,args->vna_id,
+            struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
                                                         current,current + step);
             // add to buffer
             if (data) {add_buff(args->bfr,data);}
@@ -395,7 +395,7 @@ void* scan_consumer(void *arguments) {
 
     while (args->bfr->complete < VNA_COUNT || (args->bfr->count != 0)) {
 
-        struct datapoint_NanoVNAH *data = take_buff(args->bfr);
+        struct datapoint_nanoVNA_H *data = take_buff(args->bfr);
 
         for (int i = 0; i < POINTS; i++) {
             printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 

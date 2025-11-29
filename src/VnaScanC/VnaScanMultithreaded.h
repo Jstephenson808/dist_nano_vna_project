@@ -40,7 +40,7 @@ struct nanovna_raw_datapoint {
 };
 
 // Internal representation with metadata
-struct datapoint_NanoVNAH {
+struct datapoint_nanoVNA_H {
     int vna_id;                           // Which VNA produced this data
     struct timeval send_time, receive_time;
     struct nanovna_raw_datapoint point[POINTS];    // Raw measurement from device
@@ -141,7 +141,7 @@ void fatal_error_signal(int sig);
  * Struct and functions used for shared buffer and concurrency variables
  */
 typedef struct BoundedBuffer {
-    struct datapoint_NanoVNAH **buffer;
+    struct datapoint_nanoVNA_H **buffer;
     int count;
     int in;
     int out;
@@ -153,8 +153,8 @@ typedef struct BoundedBuffer {
 
 int create_bounded_buffer(int size, BoundedBuffer *bb);
 void destroy_bounded_buffer(BoundedBuffer *buffer);
-void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data);
-struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer);
+void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data);
+struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
