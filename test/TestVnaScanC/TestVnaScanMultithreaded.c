@@ -200,7 +200,36 @@ void test_producer_takes_correct_points() {
  * Consumer & Helpers
  */
 void test_consumer_constructs_valid_output() {
-    TEST_IGNORE_MESSAGE("I'm honestly just not sure how to capture the write to terminal, tomorrow's job");
+    TEST_IGNORE_MESSAGE("Requires mocking printf()");
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(5,b);
+
+    struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
+    struct timeval time;
+    gettimeofday(&time, NULL);
+
+    data->vna_id = 1;
+    data->send_time = time;
+    data->receive_time = time;
+    for (int i = 0; i < POINTS; i++) {
+        data->point[i] = (struct nanovna_raw_datapoint) {0,{0,0},{0,0}};
+    }
+
+    b->buffer[b->out] = data;
+    b->count = 1;
+
+    extern int VNA_COUNT;
+    VNA_COUNT = 1;
+    b->complete=1;
+
+    struct scan_consumer_args args = {b};
+    scan_consumer(&args);
+
+    // CHECK OUTPUT CORRECT (I'll figure out how later)
+
+    TEST_ASSERT_EQUAL_INT(0,b->count);
+    free(data);
+    destroy_bounded_buffer(b);
 }
 
 int main(int argc, char *argv[]) {
