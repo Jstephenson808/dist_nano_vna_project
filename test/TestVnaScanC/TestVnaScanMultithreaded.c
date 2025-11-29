@@ -53,43 +53,41 @@ void test_find_binary_header_fails_gracefully() {
  * Bounded Buffer create/destroy
  */
 void test_create_bounded_buffer() {
-    BoundedBuffer b = create_bounded_buffer(5);
-    TEST_ASSERT_NOT_NULL(b.buffer);
-    destroy_bounded_buffer(&b);
-}
-
-void test_destroy_bounded_buffer() {
-    BoundedBuffer b = create_bounded_buffer(5);
-    destroy_bounded_buffer(&b);
-    TEST_ASSERT_NULL(b.buffer);
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    int error = create_bounded_buffer(5,b);
+    TEST_ASSERT_EQUAL(0,error);
+    TEST_ASSERT_NOT_NULL(b->buffer);
+    destroy_bounded_buffer(b);
 }
 
 /**
  * Bounded buffer add
  */
 void test_add_buff_adds() {
-    BoundedBuffer b = create_bounded_buffer(5);
-    TEST_ASSERT_EQUAL_INT(0,b.in);
-    TEST_ASSERT_EQUAL_INT(0,b.count);
-    b.buffer[b.in] = NULL;
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(5,b);
+    TEST_ASSERT_EQUAL_INT(0,b->in);
+    TEST_ASSERT_EQUAL_INT(0,b->count);
+    b->buffer[b->in] = NULL;
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    add_buff(&b,data);
-    TEST_ASSERT_EQUAL_INT(1,b.in);
-    TEST_ASSERT_EQUAL_INT(1,b.count);
-    TEST_ASSERT_NOT_NULL(b.buffer[b.out]);
+    add_buff(b,data);
+    TEST_ASSERT_EQUAL_INT(1,b->in);
+    TEST_ASSERT_EQUAL_INT(1,b->count);
+    TEST_ASSERT_NOT_NULL(b->buffer[b->out]);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 void test_add_buff_cycles() {
-    BoundedBuffer b = create_bounded_buffer(N);
-    b.in = N-1;
-    b.buffer[b.in] = NULL;
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(N,b);
+    b->in = N-1;
+    b->buffer[b->in] = NULL;
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    add_buff(&b,data);
-    TEST_ASSERT_EQUAL_INT(0,b.in);
-    TEST_ASSERT_NOT_NULL(b.buffer[N-1]);
+    add_buff(b,data);
+    TEST_ASSERT_EQUAL_INT(0,b->in);
+    TEST_ASSERT_NOT_NULL(b->buffer[N-1]);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 struct thread_imitator_add_args {
     BoundedBuffer *b;
@@ -101,12 +99,13 @@ void* thread_imitator_add(void *arguments) {
     return NULL;
 }
 void test_add_buff_escapes_block_after_full() {
-    BoundedBuffer b = create_bounded_buffer(5);
-    b.count = 5;
-    b.buffer[b.in] = NULL;
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(5,b);
+    b->count = 5;
+    b->buffer[b->in] = NULL;
 
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    struct thread_imitator_add_args args = {&b,data};
+    struct thread_imitator_add_args args = {b,data};
     pthread_t thread;
     int error = pthread_create(&thread, NULL, &thread_imitator_add, &args);
     if(error != 0){
@@ -114,42 +113,44 @@ void test_add_buff_escapes_block_after_full() {
         return;
     }
 
-    b.count = 4;
-    pthread_cond_signal(&b.add_cond);
+    b->count = 4;
+    pthread_cond_signal(&b->add_cond);
 
     pthread_join(thread,NULL);
 
-    TEST_ASSERT_EQUAL_INT(1,b.in);
-    TEST_ASSERT_EQUAL_INT(5,b.count);
-    TEST_ASSERT_NOT_NULL(b.buffer[b.out]);
+    TEST_ASSERT_EQUAL_INT(1,b->in);
+    TEST_ASSERT_EQUAL_INT(5,b->count);
+    TEST_ASSERT_NOT_NULL(b->buffer[b->out]);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 
 /**
  * Bounded Buffer take
  */
 void test_take_buff_takes() {
-    BoundedBuffer b = create_bounded_buffer(5);
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(5,b);
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    b.buffer[b.out] = data;
-    b.count = 1;
-    struct datapoint_NanoVNAH *dataOut = take_buff(&b);
-    TEST_ASSERT_EQUAL_INT(1,b.out);
-    TEST_ASSERT_EQUAL_INT(0,b.count);
+    b->buffer[b->out] = data;
+    b->count = 1;
+    struct datapoint_NanoVNAH *dataOut = take_buff(b);
+    TEST_ASSERT_EQUAL_INT(1,b->out);
+    TEST_ASSERT_EQUAL_INT(0,b->count);
     TEST_ASSERT_NOT_NULL(dataOut);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 void test_take_buff_cycles() {
-    BoundedBuffer b = create_bounded_buffer(N);
-    b.out = N-1;
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(N,b);
+    b->out = N-1;
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    struct datapoint_NanoVNAH *dataOut = take_buff(&b);
-    TEST_ASSERT_EQUAL_INT(0,b.out);
+    struct datapoint_NanoVNAH *dataOut = take_buff(b);
+    TEST_ASSERT_EQUAL_INT(0,b->out);
     TEST_ASSERT_NOT_NULL(dataOut);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 void* thread_imitator_take(void *arguments) {
     struct BoundedBuffer *b = arguments;
@@ -157,28 +158,29 @@ void* thread_imitator_take(void *arguments) {
     return NULL;
 }
 void test_take_buff_escapes_block_after_full() {
-    BoundedBuffer b = create_bounded_buffer(5);
-    b.count = 0;
+    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    create_bounded_buffer(5,b);
+    b->count = 0;
 
     struct datapoint_NanoVNAH *data = calloc(1,sizeof(struct datapoint_NanoVNAH));
-    b.buffer[b.out] = data;
+    b->buffer[b->out] = data;
 
     pthread_t thread;
-    int error = pthread_create(&thread, NULL, &thread_imitator_take, &b);
+    int error = pthread_create(&thread, NULL, &thread_imitator_take, b);
     if(error != 0){
         fprintf(stderr, "Error %i creating thread for test_take_buff_escapes_block_after_full(): %s\n", errno, strerror(errno));
         return;
     }
 
-    b.count = 1;
-    pthread_cond_signal(&b.take_cond);
+    b->count = 1;
+    pthread_cond_signal(&b->take_cond);
 
     pthread_join(thread,NULL);
 
-    TEST_ASSERT_EQUAL_INT(1,b.out);
-    TEST_ASSERT_EQUAL_INT(0,b.count);
+    TEST_ASSERT_EQUAL_INT(1,b->out);
+    TEST_ASSERT_EQUAL_INT(0,b->count);
     free(data);
-    destroy_bounded_buffer(&b);
+    destroy_bounded_buffer(b);
 }
 
 /**
@@ -223,7 +225,6 @@ int main(int argc, char *argv[]) {
 
     // bounded buffer tests
     RUN_TEST(test_create_bounded_buffer);
-    RUN_TEST(test_destroy_bounded_buffer);
     RUN_TEST(test_add_buff_adds);
     RUN_TEST(test_add_buff_cycles);
     RUN_TEST(test_add_buff_escapes_block_after_full);

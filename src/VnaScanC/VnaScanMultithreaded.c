@@ -59,7 +59,7 @@ int configure_serial(int serial_port, struct termios *initial_tty) {
     int error = tcgetattr(serial_port, initial_tty); // put actual initial tty in
     if (error != 0) {
         fprintf(stderr, "Error %i from tcgetattr: %s\n", errno, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
     struct termios tty = *initial_tty; // copy for editing
 
@@ -108,10 +108,10 @@ int configure_serial(int serial_port, struct termios *initial_tty) {
     // Apply settings
     if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
         fprintf(stderr, "Error %i from tcsetattr: %s\n", errno, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    return 0; // Return success
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -262,22 +262,25 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
 /**
  * Bounded Buffer handling functions (do not access bounded buffer otherwise)
  */
-BoundedBuffer create_bounded_buffer(int size) {
+int create_bounded_buffer(int size, BoundedBuffer *bb) {
     struct datapoint_NanoVNAH **buffer = malloc(sizeof(struct datapoint_NanoVNAH *)*(size+1));
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
+        /*
         free(SERIAL_PORTS);SERIAL_PORTS=NULL;
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS=NULL;
-        raise(12);
+        */
+        return EXIT_FAILURE;
     }
-    BoundedBuffer bb = {buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
-    return bb;
+    *bb = (BoundedBuffer){buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
+    return EXIT_SUCCESS;
 }
 
 void destroy_bounded_buffer(BoundedBuffer *buffer) {
     free(buffer->buffer);
     buffer->buffer = NULL;
-    // also free BoundedBuffer if it is malloced (it is not currently)
+    free(buffer);
+    buffer = NULL;
 }
 
 void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data) {
@@ -428,23 +431,37 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
 
     gettimeofday(&program_start_time, NULL);
 
-    // Create consumer and producer threads
-    BoundedBuffer bounded_buffer = create_bounded_buffer(N);
-
     int error;
-    // warning: needs work done before this will work properly >1 VNA
+
+    // Create consumer and producer threads
+    BoundedBuffer *bounded_buffer = malloc(sizeof(BoundedBuffer));
+    if (!bounded_buffer) {
+        fprintf(stderr, "Failed to allocate memory for bounded buffer construct\n");
+        free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
+        return;
+    }
+    error = create_bounded_buffer(N,bounded_buffer);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create bounded buffer\n");
+        free(bounded_buffer);
+        free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
+        return;
+    }
+    
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
     for(int i = 0; i < num_vnas; i++) {
         // Open serial port with error checking
-        SERIAL_PORTS[i] = open_serial(ports[i]); // Will need logic to decide port
+        SERIAL_PORTS[i] = open_serial(ports[i]);
         if (SERIAL_PORTS[i] < 0) {
             fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
             // Clean up already opened ports
             for (int j = 0; j < i; j++) {
                 close(SERIAL_PORTS[j]);
             }
-            destroy_bounded_buffer(&bounded_buffer);
+            destroy_bounded_buffer(bounded_buffer);
             free(SERIAL_PORTS);SERIAL_PORTS = NULL;
             free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
@@ -461,7 +478,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
             for (int j = 0; j < num_vnas; j++) {
                 close(SERIAL_PORTS[j]);
             }
-            destroy_bounded_buffer(&bounded_buffer);
+            destroy_bounded_buffer(bounded_buffer);
             free(SERIAL_PORTS);SERIAL_PORTS = NULL;
             free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
@@ -474,7 +491,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].nbr_sweeps = nbr_sweeps;
-        arguments[i].bfr = &bounded_buffer;
+        arguments[i].bfr = bounded_buffer;
 
         error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
         if(error != 0){
@@ -484,11 +501,11 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {&bounded_buffer};
+    struct scan_consumer_args consumer_args = {bounded_buffer};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        free(bounded_buffer.buffer);bounded_buffer.buffer = NULL;
+        destroy_bounded_buffer(bounded_buffer);bounded_buffer=NULL;
         free(SERIAL_PORTS);SERIAL_PORTS = NULL;
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
@@ -505,7 +522,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     if(error != 0){printf("Error %i from join consumer:\n", errno);return;}
 
     // finish up
-    destroy_bounded_buffer(&bounded_buffer);
+    destroy_bounded_buffer(bounded_buffer);
 
     close_and_reset_all();
     free(SERIAL_PORTS);

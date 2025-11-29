@@ -151,7 +151,7 @@ typedef struct BoundedBuffer {
     pthread_mutex_t lock;
 } BoundedBuffer;
 
-BoundedBuffer create_bounded_buffer(int size);
+int create_bounded_buffer(int size, BoundedBuffer *bb);
 void destroy_bounded_buffer(BoundedBuffer *buffer);
 void add_buff(BoundedBuffer *buffer, struct datapoint_NanoVNAH *data);
 struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer);
