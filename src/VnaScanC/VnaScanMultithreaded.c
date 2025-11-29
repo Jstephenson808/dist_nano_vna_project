@@ -102,7 +102,7 @@ int configure_serial(int serial_port, struct termios *initial_tty) {
     // Set timeout configuration
     // VMIN = 0, VTIME > 0: Timeout with no minimum bytes
     // Read returns when data arrives or timeout expires
-    tty.c_cc[VMIN] = 0;   // Read doesn't block (return immediately with available data)
+    tty.c_cc[VMIN] = 0;   // No minimum
     tty.c_cc[VTIME] = 10; // 1 second timeout (tenths of a second)
 
     // Apply settings
