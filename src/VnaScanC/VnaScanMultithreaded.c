@@ -9,7 +9,7 @@
  */
 int *SERIAL_PORTS = NULL;
 struct termios* INITIAL_PORT_SETTINGS = NULL;
-int VNA_COUNT = 0;
+atomic_int VNA_COUNT = 0;
 
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 struct timeval program_start_time;
