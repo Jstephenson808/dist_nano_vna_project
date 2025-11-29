@@ -314,7 +314,7 @@ struct datapoint_NanoVNAH* take_buff(BoundedBuffer *buffer) {
  * producer / consumer functions
  */
 struct datapoint_NanoVNAH* pull_scan(int port, int vnaID, int start, int stop) {
-    struct timeval send_time, recieve_time;
+    struct timeval send_time, receive_time;
     gettimeofday(&send_time, NULL);
 
     // Send scan command
@@ -356,9 +356,9 @@ struct datapoint_NanoVNAH* pull_scan(int port, int vnaID, int start, int stop) {
     // Set VNA ID (software metadata)
     data->vna_id = vnaID;
     // Set Timestamps
-    gettimeofday(&recieve_time, NULL);
+    gettimeofday(&receive_time, NULL);
     data->send_time = send_time;
-    data->recieve_time = recieve_time;
+    data->receive_time = receive_time;
     return data;
 }
 
@@ -401,7 +401,7 @@ void* scan_consumer(void *arguments) {
             printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
                    data->vna_id, total_count,
                    ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec) + (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
+                   ((double)(data->receive_time.tv_sec - program_start_time.tv_sec) + (double)(data->receive_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
                    data->point[i].frequency, 
                    data->point[i].s11.re, data->point[i].s11.im, 
                    data->point[i].s21.re, data->point[i].s21.im);
