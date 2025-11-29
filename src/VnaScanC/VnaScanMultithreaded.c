@@ -506,6 +506,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
         destroy_bounded_buffer(bounded_buffer);bounded_buffer=NULL;
+        close_and_reset_all();
         free(SERIAL_PORTS);SERIAL_PORTS = NULL;
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
@@ -515,11 +516,11 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
 
     for(int i = 0; i < num_vnas; i++) {
         error = pthread_join(producers[i], NULL);
-        if(error != 0){printf("Error %i from join producer:\n", errno);return;}
+        if(error != 0){printf("Error %i from join producer:\n", errno);}
     }
 
     error = pthread_join(consumer,NULL);
-    if(error != 0){printf("Error %i from join consumer:\n", errno);return;}
+    if(error != 0){printf("Error %i from join consumer:\n", errno);}
 
     // finish up
     destroy_bounded_buffer(bounded_buffer);
