@@ -20,9 +20,9 @@
 #include <pthread.h>
 #include <sys/time.h>
 
-#define POINTS 101
-#define MASK 135
-#define N 100
+#define POINTS 101 // number of points per scan throughout program
+#define MASK 135 // mask passed to VNAs, defining how to format output
+#define N 100 // size of bounded buffer
 
 /**
  * Declaring structs for data points
