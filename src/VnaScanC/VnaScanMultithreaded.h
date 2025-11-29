@@ -82,7 +82,7 @@ int open_serial(const char *port);
  * @param serial_port File descriptor of an already opened serial port
  * @return Original termios settings to restore later
  */
-struct termios configure_serial(int serial_port);
+int configure_serial(int serial_port, struct termios *initial_tty);
 
 /**
  * Writes a command to the serial port with error checking

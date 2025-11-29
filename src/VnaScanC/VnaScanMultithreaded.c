@@ -55,12 +55,13 @@ int open_serial(const char *port) {
  * @param serial_port The file descriptor of the open serial port
  * @return The original termios settings to restore later
  */
-struct termios configure_serial(int serial_port) {
-    struct termios initial_tty; // keep to restore settings later
-    if (tcgetattr(serial_port, &initial_tty) != 0) {
+int configure_serial(int serial_port, struct termios *initial_tty) {
+    int error = tcgetattr(serial_port, initial_tty); // put actual initial tty in
+    if (error != 0) {
         fprintf(stderr, "Error %i from tcgetattr: %s\n", errno, strerror(errno));
+        return 1;
     }
-    struct termios tty = initial_tty; // copy for editing
+    struct termios tty = *initial_tty; // copy for editing
 
     // Configure baud rate (115200)
     cfsetispeed(&tty, B115200);  // Input speed
@@ -107,9 +108,10 @@ struct termios configure_serial(int serial_port) {
     // Apply settings
     if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
         fprintf(stderr, "Error %i from tcsetattr: %s\n", errno, strerror(errno));
+        return 1;
     }
 
-    return initial_tty; // Return original settings for restoration
+    return 0; // Return success
 }
 
 /**
@@ -440,7 +442,6 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
             fprintf(stderr, "Failed to open serial port for VNA %d\n", i);
             // Clean up already opened ports
             for (int j = 0; j < i; j++) {
-                restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
                 close(SERIAL_PORTS[j]);
             }
             destroy_bounded_buffer(&bounded_buffer);
@@ -450,7 +451,21 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         }
         
         // Configure serial port and save original settings
-        INITIAL_PORT_SETTINGS[i] = configure_serial(SERIAL_PORTS[i]);
+        error = configure_serial(SERIAL_PORTS[i],&INITIAL_PORT_SETTINGS[i]);
+        if (error != 0) {
+            fprintf(stderr, "Failed to configure port settings for VNA %d\n", i);
+            // Clean up already opened ports
+            for (int j = 0; j < i; j++) {
+                restore_serial(SERIAL_PORTS[j], &INITIAL_PORT_SETTINGS[j]);
+            }
+            for (int j = 0; j < num_vnas; j++) {
+                close(SERIAL_PORTS[j]);
+            }
+            destroy_bounded_buffer(&bounded_buffer);
+            free(SERIAL_PORTS);SERIAL_PORTS = NULL;
+            free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
+            return;
+        }
         VNA_COUNT++;
 
         arguments[i].vna_id = i;
