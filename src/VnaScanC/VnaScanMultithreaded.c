@@ -135,7 +135,7 @@ void close_and_reset_all() {
         restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
         
         // Close the serial port
-        if (close(SERIAL_PORTS[i]) != 0) {
+        if (close(SERIAL_PORTS[i]) != 0 && !fatal_error_in_progress) {
             fprintf(stderr, "Error %i closing port %d: %s\n", 
                     errno, i, strerror(errno));
         }
