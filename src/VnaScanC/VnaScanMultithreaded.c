@@ -375,7 +375,7 @@ void* scan_producer(void *arguments) {
         int current = args->start;
         while (total_scans > 0) {
             struct datapoint_NanoVNAH *data = pull_scan(args->serial_port,args->vna_id,
-                                                        current,(int)round(current + step));
+                                                        current,current + step);
             // add to buffer
             if (data) {add_buff(args->bfr,data);}
 
