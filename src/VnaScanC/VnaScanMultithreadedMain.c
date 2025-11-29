@@ -43,6 +43,11 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
 
+        if (start_freq < 10000 || stop_freq > 1500000000) {
+            fprintf(stderr, "Error: minimum frequency 10kHz, maximum frequency 1.5GHzq\n");
+            return EXIT_FAILURE;
+        }
+
         if (argc < 6 + nbr_nanoVNAs) {
             fprintf(stderr, "Error: Must provide %d serial port path(s) after the 5 parameters\n", nbr_nanoVNAs);
             fprintf(stderr, "You provided: %d port(s), need: %d\n", argc - 6, nbr_nanoVNAs);
