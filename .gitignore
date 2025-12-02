@@ -1,6 +1,7 @@
 # Compiled Documents
 *.pdf
 *.ps
-vnaScan
-vnaScanMultithreaded
+VnaScan
+VnaScanMultithreaded
+TestVnaScanMultithreaded
 *.out
