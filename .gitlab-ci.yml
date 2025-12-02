@@ -1,0 +1,68 @@
+stages:
+  - build
+  - test
+
+# Cache pip packages for faster runs
+cache:
+  paths:
+    - .cache/pip
+  key: ${CI_COMMIT_REF_SLUG}
+
+build_scanner:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make clean
+    - make scan-multithreaded CC=gcc 
+  artifacts:
+    paths:
+      - src/VnaScanC/VnaScanMultithreaded
+    expire_in: 1 hour
+
+build_tests:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make scan-multithreaded-test CC=gcc  
+  artifacts:
+    paths:
+      - test/TestVnaScanC/TestVnaScanMultithreaded
+    expire_in: 1 hour
+
+test:
+  stage: test
+  image: python:3.11
+  dependencies:
+    - build_scanner
+    - build_tests
+  interruptible: true
+  timeout: 5m
+  before_script:
+    - apt-get update && apt-get install -y socat lsof
+    - pip install --cache-dir .cache/pip pyserial
+  script:
+    - echo "____ Starting Virtual Serial Ports ____"
+    - socat -d -d pty,raw,echo=0,link=/tmp/vna0_master pty,raw,echo=0,link=/tmp/vna0_slave 2>&1 &
+    - socat -d -d pty,raw,echo=0,link=/tmp/vna1_master pty,raw,echo=0,link=/tmp/vna1_slave 2>&1 &
+    - sleep 1
+    - ls -la /tmp/vna*_slave /tmp/vna*_master
+    
+    - echo "____ Starting Emulators ____"
+    - python3 test/nanovna_emulator.py /tmp/vna0_master --delay 0.001 &
+    - python3 test/nanovna_emulator.py /tmp/vna1_master --delay 0.001 &
+    - sleep 2
+    - echo "Emulators started"
+    
+    - echo "____ Running Unity Tests ____"
+    - cd test/TestVnaScanC
+    - chmod +x TestVnaScanMultithreaded
+    - lsof -p $$ | wc -l
+    - timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave  # Pass the two ports, use these for the tests
+    - lsof -p $$ | wc -l
+
+  after_script:
+    - echo "Killing all background processes..."
+    - pkill -9 python3 || true
+    - pkill -9 socat || true
