@@ -210,53 +210,74 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
  * @param expected_points The expected points value (e.g., 101)
  * @return 1 if header found, 0 if timeout/not found, -1 on error
  */
-int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points) {
-    uint8_t window[4] = {0};
+int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
+    int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
+
+    uint8_t bytes[dp_size];
     
     // Read initial 4 bytes
-    if (read_exact(fd, window, 4) != 4) {
+    if (read_exact(fd, bytes, dp_size) != dp_size) {
         fprintf(stderr, "Failed to read initial header bytes\n");
         return EXIT_FAILURE;
     }
+
+    uint8_t window[4] = {bytes[0],bytes[1],bytes[2],bytes[3]};
     
     // Check if we already have the header
     uint16_t mask = window[0] | (window[1] << 8);
     uint16_t points = window[2] | (window[3] << 8);
-    if (mask == expected_mask && points == expected_points) {
-        return EXIT_SUCCESS;
-    }
     
-    // Scan through the stream byte by byte
-    for (int i = 4; i < max_bytes; i++) {
-        uint8_t byte;
-        ssize_t n = read(fd, &byte, 1);
-        
-        if (n < 0) {
-            fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
-            return EXIT_FAILURE;
-        } else if (n == 0) {
-            fprintf(stderr, "Timeout waiting for binary header\n");
+    int i = 4;
+    int j = 4;
+    while (!(mask == expected_mask && points == expected_points)) {
+        if (i > max_bytes) {
+            fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
             return EXIT_FAILURE;
         }
-        
+        if (j == dp_size) {
+            int err = read_exact(fd, bytes, dp_size);
+            if (err < 0) {
+                fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
+                return EXIT_FAILURE;
+            }
+            else if (err < dp_size) {
+                fprintf(stderr, "Timeout waiting for binary header\n");
+                return EXIT_FAILURE;
+            }
+            j = 0;
+        }
+
         // Shift window
         window[0] = window[1];
         window[1] = window[2];
         window[2] = window[3];
-        window[3] = byte;
+        window[3] = bytes[j];
         
-        // Check for header match
+        // Update mask and points
         mask = window[0] | (window[1] << 8);
         points = window[2] | (window[3] << 8);
-        
-        if (mask == expected_mask && points == expected_points) {
-            return EXIT_SUCCESS;  // Found header
-        }
+
+        i++;
+        j++;
     }
     
-    fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
-    return EXIT_FAILURE;
+    // Pull the rest of the first datapoint
+    uint8_t remainder[j];
+    if (read_exact(fd, remainder, j) != j) {
+        fprintf(stderr, "Failed to finish reading first data point\n");
+        return EXIT_FAILURE;
+    }
+
+    int mid = dp_size - j;
+    for (int i = 0; i < mid; i++)
+        bytes[i] = bytes[i+j];
+
+    for (int i = 0; i < j; i++)
+        bytes[mid+i] = remainder[i];
+
+    memcpy(first_point,bytes,dp_size);
+    return EXIT_SUCCESS;
 }
 
 /**
