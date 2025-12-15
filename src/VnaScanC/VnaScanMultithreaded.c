@@ -9,7 +9,7 @@
  */
 int *SERIAL_PORTS = NULL;
 struct termios* INITIAL_PORT_SETTINGS = NULL;
-atomic_int VNA_COUNT = 0;
+int VNA_COUNT_GLOBAL = 0;
 
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 struct timeval program_start_time;
@@ -121,7 +121,7 @@ int configure_serial(int serial_port, struct termios *initial_tty) {
  * @param settings The original termios settings to restore
  */
 void restore_serial(int fd, const struct termios *settings) {
-    if (tcsetattr(fd, TCSANOW, settings) != 0) {
+    if (tcsetattr(fd, TCSANOW, settings) != 0 && fatal_error_in_progress == 0) {
         fprintf(stderr, "Error %i restoring settings for fd %d: %s\n", 
                 errno, fd, strerror(errno));
     }
@@ -129,10 +129,11 @@ void restore_serial(int fd, const struct termios *settings) {
 
 /**
  * Closes all serial ports and restores their initial settings
- * Loops through ports in reverse order to maintain VNA_COUNT accuracy
+ * Goes in reverse order to ensure vna count consistency
  */
 void close_and_reset_all() {
-    for (int i = VNA_COUNT-1; i >= 0; i--) {
+    while (VNA_COUNT_GLOBAL > 0) {
+        int i = VNA_COUNT_GLOBAL-1;
         // Restore original settings before closing
         restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
         
@@ -141,8 +142,7 @@ void close_and_reset_all() {
             fprintf(stderr, "Error %i closing port %d: %s\n", 
                     errno, i, strerror(errno));
         }
-        
-        VNA_COUNT--;
+        VNA_COUNT_GLOBAL--;
     }
 }
 
@@ -262,14 +262,10 @@ int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points)
 /**
  * Bounded Buffer handling functions (do not access bounded buffer otherwise)
  */
-int create_bounded_buffer(int size, BoundedBuffer *bb) {
-    struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*(size+1));
+int create_bounded_buffer(BoundedBuffer *bb) {
+    struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*N);
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
-        /*
-        free(SERIAL_PORTS);SERIAL_PORTS=NULL;
-        free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS=NULL;
-        */
         return EXIT_FAILURE;
     }
     *bb = (BoundedBuffer){buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
@@ -298,7 +294,10 @@ void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data) {
 
 struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer) {
     pthread_mutex_lock(&buffer->lock);
-    while (buffer->count == 0 && buffer->complete < VNA_COUNT) {
+    while (buffer->count == 0) {
+        if (buffer->complete >= VNA_COUNT_GLOBAL) {
+            return NULL;
+        }
         pthread_cond_wait(&buffer->add_cond, &buffer->lock);
     }
     struct datapoint_nanoVNA_H *data = buffer->buffer[buffer->out];
@@ -362,13 +361,38 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
     return data;
 }
 
-void* scan_producer(void *arguments) {
+void* scan_producer_num(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
 
     for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
         if (args->nbr_sweeps > 1) {
             printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
+        }
+
+        int current = args->start;
+        int step = (int)round(args->stop - args->start) / ((args->nbr_scans*POINTS)-1);
+        for (int scan = 0; scan < args->nbr_scans; scan++) {
+            struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
+                                                        current,current + step*(POINTS-1));
+            // add to buffer
+            if (data) {add_buff(args->bfr,data);}
+
+            current += step*POINTS;
+        }
+    }
+    args->bfr->complete++;
+    return NULL;
+}
+void* scan_producer_time(void *arguments) {
+
+    struct scan_producer_args *args = (struct scan_producer_args*)arguments;
+
+    int sweep = 1;
+    while (args->bfr->complete == 0) {
+        sweep++;
+        if (args->nbr_sweeps > 1) {
+            printf("[Producer] Starting sweep %d\n", sweep + 1);
         }
         int total_scans = args->nbr_scans;
         int step = (args->stop - args->start) / total_scans;
@@ -384,7 +408,14 @@ void* scan_producer(void *arguments) {
             current += step;
         }       
     }
-    args->bfr->complete++;
+    return NULL;
+}
+
+void* scan_timer(void *arguments) { 
+    struct scan_timer_args *args = arguments;
+    sleep(args->time_to_wait);
+    args->b->complete = VNA_COUNT_GLOBAL;
+    printf("---\ntimer done\n---\n");
     return NULL;
 }
 
@@ -393,11 +424,16 @@ void* scan_consumer(void *arguments) {
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
 
-    while (args->bfr->complete < VNA_COUNT || (args->bfr->count != 0)) {
+    while (args->bfr->complete < VNA_COUNT_GLOBAL || (args->bfr->count != 0)) {
 
         struct datapoint_nanoVNA_H *data = take_buff(args->bfr);
+        if (!data) {
+            // take_buff has returned nothing as there was nothing left to take
+            return NULL;
+        }
 
         for (int i = 0; i < POINTS; i++) {
+            
             printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
                    data->vna_id, total_count,
                    ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
@@ -405,6 +441,7 @@ void* scan_consumer(void *arguments) {
                    data->point[i].frequency, 
                    data->point[i].s11.re, data->point[i].s11.im, 
                    data->point[i].s21.re, data->point[i].s21.im);
+            
             total_count++;
         }
 
@@ -414,10 +451,10 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports) {
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, const char **ports){
     // Reset VNA_COUNT for clean state on subsequent runs
-    VNA_COUNT = 0;
-    
+    VNA_COUNT_GLOBAL = 0;
+
     // Initialise global variables
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
@@ -441,7 +478,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
     }
-    error = create_bounded_buffer(N,bounded_buffer);
+    error = create_bounded_buffer(bounded_buffer);
     if (error != 0) {
         fprintf(stderr, "Failed to create bounded buffer\n");
         free(bounded_buffer);
@@ -483,17 +520,21 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
             free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
             return;
         }
-        VNA_COUNT++;
+        VNA_COUNT_GLOBAL++;
 
         arguments[i].vna_id = i;
         arguments[i].serial_port = SERIAL_PORTS[i];
         arguments[i].nbr_scans = nbr_scans;
         arguments[i].start = start;
         arguments[i].stop = stop;
-        arguments[i].nbr_sweeps = nbr_sweeps;
+        arguments[i].nbr_sweeps = sweeps;
         arguments[i].bfr = bounded_buffer;
 
-        error = pthread_create(&producers[i], NULL, &scan_producer, &arguments[i]);
+        if (sweep_mode == NUM_SWEEPS) {
+            error = pthread_create(&producers[i], NULL, &scan_producer_num, &arguments[i]);
+        } else if (sweep_mode == TIME) {
+            error = pthread_create(&producers[i], NULL, &scan_producer_time, &arguments[i]);
+        }
         if(error != 0){
             fprintf(stderr, "Error %i creating producer thread %d: %s\n", errno, i, strerror(errno));
             return;
@@ -510,6 +551,18 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
         free(SERIAL_PORTS);SERIAL_PORTS = NULL;
         free(INITIAL_PORT_SETTINGS);INITIAL_PORT_SETTINGS = NULL;
         return;
+    }
+
+    if (sweep_mode == TIME) {
+        pthread_t timer;
+        struct scan_timer_args timer_args= (struct scan_timer_args){sweeps,bounded_buffer};
+        error = pthread_create(&timer, NULL, &scan_timer, &timer_args);
+        if(error != 0){
+            fprintf(stderr, "Error %i creating timer thread: %s\n", errno, strerror(errno));
+            return;
+        }
+        error = pthread_join(timer, NULL);
+        if(error != 0){printf("Error %i from join timer:\n", errno);}
     }
 
     // wait for threads to finish
