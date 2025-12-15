@@ -1,4 +1,4 @@
-CC?=clang
+CC=clang
 CFLAGS=-Wall -Werror
 
 CLEANUP = rm -f
@@ -28,6 +28,9 @@ scan-multithreaded:
 scan-multithreaded-test:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} ${MULTI_LINK}
 	- ./${MULTI_TEST_NAME}
+
+debugging-symbols:
+	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} -g ${MULTI_LINK}
 
 clean:
 	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME}

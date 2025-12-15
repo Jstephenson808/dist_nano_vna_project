@@ -151,7 +151,7 @@ typedef struct BoundedBuffer {
     pthread_mutex_t lock;
 } BoundedBuffer;
 
-int create_bounded_buffer(int size, BoundedBuffer *bb);
+int create_bounded_buffer(BoundedBuffer *bb);
 void destroy_bounded_buffer(BoundedBuffer *buffer);
 void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data);
 struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
@@ -174,7 +174,15 @@ struct scan_producer_args {
     int nbr_sweeps; 
     BoundedBuffer *bfr;
 };
-void* scan_producer(void *args);
+void* scan_producer_num(void *arguments);
+
+struct scan_timer_args {
+    int time_to_wait;
+    BoundedBuffer *b;
+};
+void* scan_producer_time(void *arguments);
+void* scan_timer(void* arguments);
+
 struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
 
 /**
@@ -207,6 +215,10 @@ void* scan_consumer(void *args);
  * @param nbr_sweeps Number of frequency sweeps to perform
  * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, int nbr_sweeps, const char **ports);
+typedef enum {
+    NUM_SWEEPS,
+    TIME
+} SweepMode;
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, const char **ports);
 
 #endif
