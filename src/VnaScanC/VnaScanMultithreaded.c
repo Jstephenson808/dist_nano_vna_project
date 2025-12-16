@@ -210,7 +210,7 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
  * @param expected_points The expected points value (e.g., 101)
  * @return 1 if header found, 0 if timeout/not found, -1 on error
  */
-inline int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
+int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
     int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
 
@@ -353,7 +353,7 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
     }
 
     // Find binary header and read first point
-    int header_found = find_binary_header(port, &data[0], MASK, POINTS);
+    int header_found = find_binary_header(port, &data->point[0], MASK, POINTS);
     if (header_found != EXIT_SUCCESS) {
         fprintf(stderr, "Failed to find binary header\n");
         free(data);

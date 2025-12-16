@@ -114,7 +114,7 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
  * @param expected_points The expected points value (e.g., 101)
  * @return 1 if header found, 0 if timeout/not found, -1 on error
  */
-inline int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
+int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
 
 /**
  * Tests connection to NanoVNA by issuing info command

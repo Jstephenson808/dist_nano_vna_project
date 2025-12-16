@@ -492,6 +492,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_write_command);
     RUN_TEST(test_read_exact_reads_one_byte);
     RUN_TEST(test_find_binary_header_handles_random_data);
+    RUN_TEST(test_find_binary_header_constructs_correct_first_point);
     RUN_TEST(test_find_binary_header_fails_gracefully);
 
     // bounded buffer tests
