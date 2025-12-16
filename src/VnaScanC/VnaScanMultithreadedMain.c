@@ -20,10 +20,12 @@ int main(int argc, char *argv[]) {
     const char **ports;
     const char* default_port = "/dev/ttyACM0";
 
+    int pps = 101; // points per scan
+
     if (argc > 1) {
-        if (argc < 7) {
-            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <sweep_mode> <sweeps> <nbr_nanoVNAs> [port1] [port2] ...\n", argv[0]);
-            fprintf(stderr, "Example: %s 50000000 900000000 20 -s 5 2 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
+        if (argc < 8) {
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <sweep_mode> <sweeps> <points_per_scan> <nbr_nanoVNAs> [port1] [port2] ...\n", argv[0]);
+            fprintf(stderr, "Example: %s 50000000 900000000 20 -s 5 101 2 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
             return EXIT_FAILURE;
         }
@@ -32,8 +34,9 @@ int main(int argc, char *argv[]) {
         stop_freq = atol(argv[2]);
         nbr_scans = atoi(argv[3]);
         sweeps = atoi(argv[5]);
-        nbr_nanoVNAs = atoi(argv[6]);
-        ports = (const char **)&argv[7];
+        pps = atoi(argv[6]);
+        nbr_nanoVNAs = atoi(argv[7]);
+        ports = (const char **)&argv[8];
 
         // Validation of arguments
         if ((strcmp("-s",argv[4]) == 0)) {
@@ -63,15 +66,20 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
 
-        if (argc < 7 + nbr_nanoVNAs) {
+        if (argc < 8 + nbr_nanoVNAs) {
             fprintf(stderr, "Error: Must provide %d serial port path(s) after the 5 parameters\n", nbr_nanoVNAs);
             fprintf(stderr, "You provided: %d port(s), need: %d\n", argc - 7, nbr_nanoVNAs);
             return EXIT_FAILURE;
         }
 
+        if (pps < 1 || pps > 101) {
+            fprintf(stderr, "Error: minimum points per scan 1, maximum points per scan 101\n");
+            return EXIT_FAILURE;
+        }
+
     } else {
-        printf("Running default scan: %ld Hz to %ld Hz, %d points, %d VNA(s), %d sweep(s)\n",
-               start_freq, stop_freq, nbr_scans*POINTS, nbr_nanoVNAs, sweeps);
+        printf("Running default scan: %ld Hz to %ld Hz, %d points, %d PPS, %d VNA(s), %d sweep(s)\n",
+               start_freq, stop_freq, nbr_scans*pps, pps, nbr_nanoVNAs, sweeps);
         
         // Default: try /dev/ttyACM0
         ports = (const char **)&default_port;
@@ -89,14 +97,14 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // call a scan
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, ports);   
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, ports);   
 
     // finish timing
     gettimeofday(&stop, NULL);
     double elapsed = (double)(stop.tv_sec - start.tv_sec) + 
                      (double)(stop.tv_usec - start.tv_usec) / 1000000.0;
     
-    int total_points = (nbr_scans * POINTS) * sweeps;
+    int total_points = (nbr_scans * pps) * sweeps;
     printf("---\ntook %.6f s\n", elapsed);
     printf("%.6f s per point measurement\n", elapsed / total_points);
     printf("%.2f points per second\n", total_points / elapsed);

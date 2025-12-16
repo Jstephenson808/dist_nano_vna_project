@@ -10,6 +10,7 @@ const char **ports;
 extern int *SERIAL_PORTS;
 extern struct termios* INITIAL_PORT_SETTINGS;
 extern int VNA_COUNT_GLOBAL;
+extern int POINTS;
 
 void setUp(void) {
     /* This is run before EACH TEST */
@@ -355,6 +356,9 @@ void test_pull_scan_constructs_valid_data() {
     for (int i = 0; i < POINTS; i++) {
         TEST_ASSERT_EQUAL_INT(start+(i*POINTS*1000),data->point[i].frequency);
     }
+
+    free(data->point);
+    free(data);
 }
 void test_pull_scan_nulls_malformed_data() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
@@ -393,6 +397,8 @@ void test_producer_num_takes_correct_points() {
             int expected = start+((scan*POINTS + i)*step);
             TEST_ASSERT_EQUAL_INT(expected,b->buffer[scan]->point[i].frequency);
         }
+        free(b->buffer[scan]->point);
+        free(b->buffer[scan]);
     }
     destroy_bounded_buffer(b);
 }
@@ -437,6 +443,12 @@ void test_producer_time_takes_correct_time() {
     TEST_ASSERT_GREATER_OR_EQUAL_INT(time_to_scan,time_expired);
     TEST_ASSERT_LESS_OR_EQUAL_INT(time_to_scan+1,time_expired);
 
+    for (int i = 0; i < POINTS; i++) {
+        if (b->buffer[i]) {
+            free(b->buffer[i]->point);
+            free(b->buffer[i]);
+        }
+    }
     destroy_bounded_buffer(b);
 }
 
@@ -470,7 +482,6 @@ void test_consumer_constructs_valid_output() {
     // CHECK OUTPUT CORRECT (I'll figure out how later)
 
     TEST_ASSERT_EQUAL_INT(0,b->count);
-    free(data);
     destroy_bounded_buffer(b);
 }
 

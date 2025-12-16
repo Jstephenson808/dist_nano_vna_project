@@ -10,6 +10,7 @@
 int *SERIAL_PORTS = NULL;
 struct termios* INITIAL_PORT_SETTINGS = NULL;
 int VNA_COUNT_GLOBAL = 0;
+int POINTS = 101;
 
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 struct timeval program_start_time;
@@ -354,6 +355,12 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
         fprintf(stderr, "Failed to allocate memory for data points\n");
         return NULL;
     }
+    data->point = malloc(sizeof(struct nanovna_raw_datapoint) * POINTS);
+    if (!data->point) {
+        fprintf(stderr, "Failed to allocate memory for raw data points\n");
+        free(data);
+        return NULL;
+    }
 
     // Find binary header and read first point
     int header_found = find_binary_header(port, &data->point[0], MASK, POINTS);
@@ -373,6 +380,7 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
         if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
             fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
                     i, bytes_read, sizeof(struct nanovna_raw_datapoint));
+            free(data->point);
             free(data);
             return NULL;
         }
@@ -471,17 +479,19 @@ void* scan_consumer(void *arguments) {
             total_count++;
         }
 
+        free(data->point);
         free(data);
         data = NULL;
     }
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, const char **ports){
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports){
     // Reset VNA_COUNT for clean state on subsequent runs
     VNA_COUNT_GLOBAL = 0;
 
     // Initialise global variables
+    POINTS = pps;
     SERIAL_PORTS = calloc(num_vnas, sizeof(int));
     INITIAL_PORT_SETTINGS = calloc(num_vnas, sizeof(struct termios));
     
