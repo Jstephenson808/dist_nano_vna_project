@@ -143,12 +143,14 @@ void test_find_binary_header_handles_random_data() {
     char msg_buff[100];
     int start = 50000000;
     snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+10000000, POINTS, MASK);
+    
     write_command(port,"info\r");
     sleep(1);
     write_command(port,msg_buff);
     sleep(1);
 
-    int error = find_binary_header(port,MASK,POINTS);
+    struct nanovna_raw_datapoint fp;
+    int error = find_binary_header(port,&fp,MASK,POINTS);
     TEST_ASSERT_EQUAL_INT(0,error);
 
     uint32_t freq;
@@ -165,9 +167,10 @@ void test_find_binary_header_fails_gracefully() {
     write_command(port,msg_buff);
     sleep(1);
 
-    int error = find_binary_header(port,MASK,POINTS);
+    struct nanovna_raw_datapoint fp;
+    int error = find_binary_header(port,&fp,MASK,POINTS);
     TEST_ASSERT_EQUAL_INT(0,error);
-    error = find_binary_header(port,MASK,POINTS);
+    error = find_binary_header(port,&fp,MASK,POINTS);
     TEST_ASSERT_NOT_EQUAL_INT(0,error);
 }
 
