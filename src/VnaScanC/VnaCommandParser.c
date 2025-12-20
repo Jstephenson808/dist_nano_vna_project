@@ -1,5 +1,11 @@
 #include "VnaScanMultithreaded.h"
 
+void help() {
+    printf("        scan: starts a scan with current settings\n\
+        exit: safely exits the program\n\
+        help: prints a list of all available commands\n");
+}
+
 int main() {
     // set defaults
     long start_freq = 50000000;
@@ -22,6 +28,9 @@ int main() {
         }
         else if (strcmp(buff,"exit") == 0) {
             stop = 1;
+        }
+        else if (strcmp(buff,"help") == 0) {
+            help();
         }
     }
     return 0;
