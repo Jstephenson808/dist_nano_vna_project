@@ -25,6 +25,9 @@ scan:
 scan-multithreaded:
 	$(CC) $(CFLAGS) ${MULTI_NAME}.c ${MULTI_NAME}Main.c -o ${MULTI_NAME} ${MULTI_LINK}
 
+scan-parser:
+	$(CC) $(CFLAGS) ${MULTI_NAME}.c VnaCommandParser.c -o VnaCommandParser ${MULTI_LINK}
+
 scan-multithreaded-test:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} ${MULTI_LINK}
 	- ./${MULTI_TEST_NAME}

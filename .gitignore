@@ -3,5 +3,6 @@
 *.ps
 VnaScan
 VnaScanMultithreaded
+VnaCommandParser
 TestVnaScanMultithreaded
 *.out
