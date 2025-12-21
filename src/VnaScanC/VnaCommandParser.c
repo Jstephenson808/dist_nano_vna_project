@@ -4,15 +4,15 @@
 void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
-        printf(
-"    scan: starts a scan with current settings\n\
+        printf("\
+    scan: starts a scan with current settings\n\
     exit: safely exits the program\n\
     help: prints a list of all available commands\n"
         );
     }
     else if (strcmp(tok,"scan") == 0) {
-        printf(
-"    Starts a scan with current settings. Options:\n\
+        printf("\
+    Starts a scan with current settings. Options:\n\
     scan sweeps - runs a certain number of sweeps (default)  \n\
     scan time - runs sweeps continuosly until specified time elapsed\n"
         );
