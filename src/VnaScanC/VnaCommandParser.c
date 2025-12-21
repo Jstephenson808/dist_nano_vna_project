@@ -1,9 +1,22 @@
 #include "VnaScanMultithreaded.h"
+#include <string.h>
 
 void help() {
-    printf("        scan: starts a scan with current settings\n\
-        exit: safely exits the program\n\
-        help: prints a list of all available commands\n");
+    char* tok = strtok(NULL, " \n");
+    if (tok == NULL) {
+        printf(
+"    scan: starts a scan with current settings\n\
+    exit: safely exits the program\n\
+    help: prints a list of all available commands\n"
+        );
+    }
+    else if (strcmp(tok,"scan") == 0) {
+        printf(
+"    Starts a scan with current settings. Options:\n\
+    scan sweeps - runs a certain number of sweeps (default)  \n\
+    scan time - runs sweeps continuosly until specified time elapsed\n"
+        );
+    }
 }
 
 int main() {
@@ -22,14 +35,28 @@ int main() {
     while (stop != 1) {
         printf(">>> ");
         char buff[50];
-        scanf("%s", buff);
-        if (strcmp(buff,"scan") == 0) {
-            run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, ports);
+        fgets(buff, sizeof(buff), stdin);
+
+        char* tok = strtok(buff, " \n");
+
+        if (tok == NULL) {
+            printf("bad read");
         }
-        else if (strcmp(buff,"exit") == 0) {
+        else if (strcmp(tok,"scan") == 0) {
+            tok = strtok(NULL, " \n");
+            if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
+                run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, ports);
+            }
+            else if (strcmp(tok,"time") == 0) {
+                sweep_mode = TIME;
+                run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, ports);
+                sweep_mode = NUM_SWEEPS;
+            }
+        }
+        else if (strcmp(tok,"exit") == 0) {
             stop = 1;
         }
-        else if (strcmp(buff,"help") == 0) {
+        else if (strcmp(tok,"help") == 0) {
             help();
         }
     }
