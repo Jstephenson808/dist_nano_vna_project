@@ -5,4 +5,5 @@ VnaScan
 VnaScanMultithreaded
 VnaCommandParser
 TestVnaScanMultithreaded
+TestVnaCommandParser
 *.out
