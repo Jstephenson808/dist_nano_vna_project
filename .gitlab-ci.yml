@@ -58,8 +58,10 @@ test:
     - echo "____ Running Unity Tests ____"
     - cd test/TestVnaScanC
     - chmod +x TestVnaScanMultithreaded
+    - chmod +x TestVnaCommandParser
     - lsof -p $$ | wc -l
     - timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave  # Pass the two ports, use these for the tests
+    -  timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt 
     - lsof -p $$ | wc -l
 
   after_script:
