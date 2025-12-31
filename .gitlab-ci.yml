@@ -20,7 +20,7 @@ build_scanner:
       - src/VnaScanC/VnaScanMultithreaded
     expire_in: 1 hour
 
-build_tests:
+build_scanner_tests:
   stage: build
   image: gcc:latest
   script:
@@ -29,6 +29,29 @@ build_tests:
   artifacts:
     paths:
       - test/TestVnaScanC/TestVnaScanMultithreaded
+    expire_in: 1 hour
+
+build_parser:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make clean
+    - make scan-parser CC=gcc 
+  artifacts:
+    paths:
+      - src/VnaScanC/VnaCommandParser
+    expire_in: 1 hour
+
+build_parser_tests:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make scan-parser-test CC=gcc  
+  artifacts:
+    paths:
+      - test/TestVnaScanC/TestVnaCommandParser
     expire_in: 1 hour
 
 test:
