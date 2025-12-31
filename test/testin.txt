@@ -1,0 +1,5 @@
+scan
+scan sweeps
+scan time
+help
+exit
