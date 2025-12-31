@@ -67,7 +67,7 @@ int main() {
     int fin = 0;
     while (fin != 1) {
         printf(">>> ");
-        readCommand();
+        fin = readCommand();
     }
     return 0;
 }
