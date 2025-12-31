@@ -59,7 +59,9 @@ test:
   image: python:3.11
   dependencies:
     - build_scanner
-    - build_tests
+    - build_scanner_tests
+    - build_parser
+    - build_parser_tests
   interruptible: true
   timeout: 5m
   before_script:
