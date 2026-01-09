@@ -360,6 +360,25 @@ void test_pull_scan_constructs_valid_data() {
     free(data->point);
     free(data);
 }
+void test_pull_scan_takes_correct_number_points() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    POINTS = 10;
+    int port = SERIAL_PORTS[0];
+    int start = 50000000;
+    
+    struct datapoint_nanoVNA_H* data = pull_scan(port,1,start,start+(POINTS*100000));
+
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT_EQUAL_INT(1,data->vna_id);
+    TEST_ASSERT_NOT_NULL(data->point);
+    for (int i = 0; i < POINTS; i++) {
+        TEST_ASSERT_EQUAL_INT(start+(i*POINTS*1000),data->point[i].frequency);
+    }
+
+    free(data->point);
+    free(data);
+    POINTS = 101;
+}
 void test_pull_scan_nulls_malformed_data() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
     int port = SERIAL_PORTS[0];
