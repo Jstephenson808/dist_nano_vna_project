@@ -5,3 +5,4 @@ VnaScan
 VnaScanMultithreaded
 TestVnaScanMultithreaded
 *.out
+.venv
