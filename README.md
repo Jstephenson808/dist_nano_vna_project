@@ -47,6 +47,7 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 ## Requirements
 
 ### Hardware
+
 - NanoVNA-H device (or compatible VNA)
 
 ### Software
@@ -205,11 +206,13 @@ make
 - `VnaCommunication.h` - Header file for above
 
 **Prototypes (Development History):**
+
 - `VnaScan.c` - Initial single-threaded C implementation
 - `VnaScan.py` - Initial Python prototype
 
 ## Team
-Team JH05 - University of Glasgow  
+
+Team JH05 - University of Glasgow
 Level 3 Team Project H (2025/2026)
 
 ## License
