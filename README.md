@@ -12,7 +12,7 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 
 - **High-Speed Binary Scanning** - Direct binary protocol communication for maximum throughput
 - **Multithreaded Architecture** - Producer-consumer pattern supporting parallel scanning from multiple VNA devices
-- **Calibration Support** - On-device calibration application 
+- **Calibration Support** - On-device calibration application
 - **S-Parameter Capture** - Full S11 and S21 complex data acquisition (frequency, real, imaginary components)
 
 ## Project Structure
@@ -20,12 +20,15 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ```
 ├── README.md
 ├── src/                                    # Main project directory
-│   ├── VnaScanC/                           
+│   ├── VnaScanC/   
 │   │   ├── Makefile                        # Build configuration
 │   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
 │   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
 │   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
+│   ├── VnaScanGUI/
+│   │   ├── requirements.txt		    # Requirements for vnaScanGUI.py
+│   │   └── vnaScanGUI.py		    # Python GUI for VnaScanC
 │   └── VnaScanPython/
 │       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
@@ -39,10 +42,12 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ## Requirements
 
 ### Hardware
+
 - NanoVNA-H device (or compatible VNA)
 - USB cable for serial connection
 
 ### Software
+
 - **Linux** (tested), macOS, or Windows
 - **C Compiler** (Clang)
 
@@ -78,25 +83,28 @@ cd src/VnaScanC
 **Examples:**
 
 Single VNA, single 101 point sweep:
+
 ```bash
 ./VnaScanMultithreaded 50000000 900000000 1 -s 1 1 dev/ttyACM0
 ```
 
 Single VNA, five 2020 point sweeps:
+
 ```bash
 ./VnaScanMultithreaded 50000000 900000000 20 -s 5 1 dev/ttyACM0
 ```
 
 Single VNA, 2020 point sweeps over the range 50000000-900000000 Hz for 60 seconds:
+
 ```bash
 ./VnaScanMultithreaded 50000000 900000000 20 -t 60 1 dev/ttyACM0
 ```
 
 Multiple VNAs (parallel scanning), five 2020 point sweeps each:
+
 ```bash
 ./VnaScanMultithreaded 50000000 900000000 20 -s 5 2 dev/ttyACM0 dev/ttyACM1
 ```
-
 
 ## Scan Modes
 
@@ -125,16 +133,19 @@ make
 ### Code Structure
 
 **Main Implementation:**
+
 - `VnaScanMultithreaded.c` - Functions to allow for multithreaded, multi-VNA scans.
 - `VnaScanMultithreadedMain.c` - Driver file, takes in user input and calls relevant functions.
 - `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
 
 **Prototypes (Development History):**
+
 - `VnaScan.c` - Initial single-threaded C implementation
 - `VnaScan.py` - Initial Python prototype
 
 ## Team
-Team JH05 - University of Glasgow  
+
+Team JH05 - University of Glasgow
 Level 3 Team Project H (2025/2026)
 
 ## License
