@@ -27,6 +27,9 @@ void help() {
     scan time - runs sweeps continuosly until specified time elapsed\n"
         );
     }
+    else {
+        printf("Usage: help [command]\nFor list of possible commands type 'help'.\n");
+    }
 }
 
 void scan() {
@@ -39,6 +42,9 @@ void scan() {
         sweep_mode = TIME;
         run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, ports);
     }
+    else {
+        printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
+    }
 }
 
 int readCommand() {
@@ -48,7 +54,7 @@ int readCommand() {
     char* tok = strtok(buff, " \n");
 
     if (tok == NULL) {
-        printf("bad read");
+        return 0;
     }
     else if (strcmp(tok,"scan") == 0) {
         scan();
@@ -58,6 +64,9 @@ int readCommand() {
     }
     else if (strcmp(tok,"help") == 0) {
         help();
+    }
+    else {
+        printf("Command not recognised. Type 'help' for list of available commands.\n");
     }
     return 0;
 }
