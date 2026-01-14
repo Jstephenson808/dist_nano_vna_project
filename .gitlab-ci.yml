@@ -20,7 +20,7 @@ build_scanner:
       - src/VnaScanC/VnaScanMultithreaded
     expire_in: 1 hour
 
-build_tests:
+build_scanner_tests:
   stage: build
   image: gcc:latest
   script:
@@ -31,12 +31,37 @@ build_tests:
       - test/TestVnaScanC/TestVnaScanMultithreaded
     expire_in: 1 hour
 
+build_parser:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make clean
+    - make scan-parser CC=gcc 
+  artifacts:
+    paths:
+      - src/VnaScanC/VnaCommandParser
+    expire_in: 1 hour
+
+build_parser_tests:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make scan-parser-test CC=gcc  
+  artifacts:
+    paths:
+      - test/TestVnaScanC/TestVnaCommandParser
+    expire_in: 1 hour
+
 test:
   stage: test
   image: python:3.11
   dependencies:
     - build_scanner
-    - build_tests
+    - build_scanner_tests
+    - build_parser
+    - build_parser_tests
   interruptible: true
   timeout: 5m
   before_script:
@@ -58,8 +83,10 @@ test:
     - echo "____ Running Unity Tests ____"
     - cd test/TestVnaScanC
     - chmod +x TestVnaScanMultithreaded
+    - chmod +x TestVnaCommandParser
     - lsof -p $$ | wc -l
     - timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave  # Pass the two ports, use these for the tests
+    -  timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt 
     - lsof -p $$ | wc -l
 
   after_script:

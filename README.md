@@ -25,26 +25,31 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 │   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
 │   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
+│   │   ├── VnaCommandParser.c              # Alternative driver file with CLI command parser
 │   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
 │   └── VnaScanPython/
 │       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
     ├── nanovna_emulator.py                 # Python emulator for CI/CD testing
+    ├── simulatedTests.sh                   # Bash file for runnings tests with emulator automatically
+    ├── testin.txt                          # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
     └── TestVnaScanC/
         └── TestVnaScanMultithreaded.c      # Unity tests for multithreaded scanner
+        └── TestVnaCommandParser.c          # Unity tests for CLI command parser
 ```
 
-**Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is **`vnaScanMultithreaded.c`** and **`vnaScanMultithreaded.h`**.
+**Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is contained within **`VnaScanMultithreaded.c`**, **`VnaScanMultithreadedMain.c`**, and **`VnaCommandParser.c`**.
 
 ## Requirements
 
 ### Hardware
 - NanoVNA-H device (or compatible VNA)
-- USB cable for serial connection
 
 ### Software
 - **Linux** (tested), macOS, or Windows
-- **C Compiler** (Clang)
+- **C Compiler** (Clang or GCC)
+- **Python3**
+- **socat** and **pyserial** for Python (for testing, not required for general use) 
 
 ## Installation
 
@@ -97,6 +102,53 @@ Multiple VNAs (parallel scanning), five 2020 point sweeps each:
 ./VnaScanMultithreaded 50000000 900000000 20 -s 5 2 dev/ttyACM0 dev/ttyACM1
 ```
 
+### CLI Command Parser
+
+There is an option to use a CLI app to run scans as follows:
+```bash
+cd src/VnaScanC
+./VnaCommandParser
+```
+
+You can find a list of available commands for this app with the following command:
+```bash
+./VnaCommandParser
+>>> help
+```
+
+Or find details about a given command like so:
+```bash
+./VnaCommandParser
+>>> help <command>
+```
+e.g.
+```bash
+./VnaCommandParser
+>>> help <scan>
+```
+
+## Testing
+
+We have a unit testing suite, powered by [ThrowTheSwitch's Unity testing framework](https://github.com/ThrowTheSwitch/Unity).
+
+Our unit tests are contained within the test directory. They can be run individually as so (after running the Makefile):
+```bash
+cd test/TestVnaScanC
+./TestVnaScanMultithreaded
+./TestVnaCommandParser
+```
+This will ignore some tests as there is no VNA connected. They can also be run with a VNA plugged in as so:
+```bash
+./TestVnaScanMultithreaded dev/ttyACM0
+```
+This will run all tests, although there are a couple that will only work properly with the simulated VNA.
+
+We also have a small bash file that can simulate having a VNA connected for the purposes of testing. 
+To run this file you need to ensure that you have the Python modules socat and pyserial, and have run the Makefile.
+The file is then run like so:
+```bash
+bash simulatedTests.sh
+```
 
 ## Scan Modes
 
@@ -128,6 +180,8 @@ make
 - `VnaScanMultithreaded.c` - Functions to allow for multithreaded, multi-VNA scans.
 - `VnaScanMultithreadedMain.c` - Driver file, takes in user input and calls relevant functions.
 - `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
+- `VnaCommandParser.c` - Driver file, repeatedly takes in user input and executes commands.
+- `VnaCommandParser.h` - Header file for above
 
 **Prototypes (Development History):**
 - `VnaScan.c` - Initial single-threaded C implementation
@@ -145,6 +199,7 @@ GNU GPL v3.0
 
 - Original [NanoVNA project](https://github.com/ttrftech/NanoVNA) by ttrftech
 - [NanoVNA-H firmware](https://github.com/hugen79/NanoVNA-H9) modifications and improvements
+- [Unity](https://github.com/ThrowTheSwitch/Unity) by ThrowTheSwitch
 - University of Glasgow School of Computing Science
 
 ## Project Status

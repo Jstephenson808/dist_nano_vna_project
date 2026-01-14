@@ -14,6 +14,8 @@ echo "____ Running Unity Tests ____"
 cd TestVnaScanC
 chmod +x TestVnaScanMultithreaded
 timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave
-
 # this line can be used if you need to run with a debugger
 #gdb -ex 'run /tmp/vna0_slave /tmp/vna1_slave' ./TestVnaScanMultithreaded
+
+chmod +x TestVnaCommandParser
+timeout 120s ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt
