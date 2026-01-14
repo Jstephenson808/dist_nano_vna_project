@@ -1,6 +1,9 @@
 import customtkinter as ctk
 import subprocess
 import threading
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+import numpy as np
 
 class VNAScannerGUI:
     def __init__(self):
@@ -152,6 +155,21 @@ class VNAScannerGUI:
         )
         self.plot_type.set("S11 Magnitude (dB)")
         self.plot_type.pack(side="left", padx=10)
+
+        # Statistics
+        self.stats_label = ctk.CTkLabel(plot_control, text="Points: 0", font=("Roboto", 11))
+        self.stats_label.pack(side="right", padx=20)
+        
+        # Matplotlib figure
+        self.figure = Figure(figsize=(8, 6), dpi=100)
+        self.ax = self.figure.add_subplot(111)
+        self.ax.set_title("S-Parameter Data")
+        self.ax.set_xlabel("Frequency (MHz)")
+        self.ax.set_ylabel("Magnitude (dB)")
+        self.ax.grid(True, alpha=0.3)
+        
+        self.canvas = FigureCanvasTkAgg(self.figure, self.right_panel)
+        self.canvas.get_tk_widget().pack(pady=10, padx=10, fill="both", expand=True)
         
     def change_theme(self, theme):
         """Change appearance theme"""
