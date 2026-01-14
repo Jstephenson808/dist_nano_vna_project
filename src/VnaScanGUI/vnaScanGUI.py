@@ -4,6 +4,7 @@ import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
+import glob
 
 class VNAScannerGUI:
     def __init__(self):
@@ -92,7 +93,7 @@ class VNAScannerGUI:
         self.num_vnas.insert(0, "2")
         self.num_vnas.pack(padx=10, pady=(0, 5), fill="x")
         
-        detect_btn = ctk.CTkButton(vna_frame, text="Auto-detect VNAs")
+        detect_btn = ctk.CTkButton(vna_frame, text="Auto-detect VNAs", command=self.detect_vnas)
         detect_btn.pack(padx=10, pady=(0, 10), fill="x")
         
         ctk.CTkLabel(vna_frame, text="Serial Ports (one per line):").pack(anchor="w", padx=10)
@@ -170,6 +171,27 @@ class VNAScannerGUI:
         
         self.canvas = FigureCanvasTkAgg(self.figure, self.right_panel)
         self.canvas.get_tk_widget().pack(pady=10, padx=10, fill="both", expand=True)
+
+    def log(self, message):
+        """Add message to log"""
+        self.log_text.insert("end", f"{message}\n")
+        self.log_text.see("end")
+
+    def detect_vnas(self):
+        """Auto-detect connected VNA devices"""
+        ports = sorted(glob.glob("/dev/ttyACM*"))
+        
+        if not ports:
+            self.log("No VNA devices found on /dev/ttyACM*")
+            return
+        
+        self.num_vnas.delete(0, "end")
+        self.num_vnas.insert(0, str(len(ports)))
+        
+        self.ports_text.delete("1.0", "end")
+        self.ports_text.insert("1.0", "\n".join(ports))
+        
+        self.log(f"Detected {len(ports)} VNA device(s): {', '.join(ports)}")
         
     def change_theme(self, theme):
         """Change appearance theme"""
