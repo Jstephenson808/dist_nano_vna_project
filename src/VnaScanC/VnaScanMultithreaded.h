@@ -161,7 +161,7 @@ struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
  *
  * Accesses buffer according to the producer-consumer problem
  * Computes step (frequency distance between scans) from start stop and points,
- * then pulls scans from NanoVNA in increments of 101 points and appends to buffer.
+ * then pulls scans from NanoVNA in increments of pps points and appends to buffer.
  * 
  * @param args pointer to scan_producer_args struct used to pass arguments into this function
  */
@@ -213,6 +213,7 @@ void* scan_consumer(void *args);
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
+ * @param pps Number of points per scan
  * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
 typedef enum {
