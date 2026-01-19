@@ -214,7 +214,7 @@ int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16
     int max_bytes = 500;  // Maximum bytes to scan before giving up
     int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
 
-    uint8_t bytes[dp_size];
+    uint8_t bytes[sizeof(struct nanovna_raw_datapoint)];
     
     // Read initial 4 bytes
     if (read_exact(fd, bytes, dp_size) != dp_size) {
