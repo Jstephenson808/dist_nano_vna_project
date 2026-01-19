@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
         if ((strcmp("-s",argv[4]) == 0)) {
             sweep_mode = NUM_SWEEPS;
         }
-        else if (strcmp("-t",argv[4]) != 0) {
+        else if (strcmp("-t",argv[4]) == 0) {
             sweep_mode = TIME;
         }
         else {
