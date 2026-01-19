@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (start_freq < 10000 || stop_freq > 1500000000) {
-            fprintf(stderr, "Error: minimum frequency 10kHz, maximum frequency 1.5GHzq\n");
+            fprintf(stderr, "Error: minimum frequency 10kHz, maximum frequency 1.5GHz\n");
             return EXIT_FAILURE;
         }
 
