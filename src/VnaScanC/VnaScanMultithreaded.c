@@ -228,53 +228,60 @@ int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16
     uint16_t mask = window[0] | (window[1] << 8);
     uint16_t points = window[2] | (window[3] << 8);
     
+    int read = 4;
     int i = 4;
-    int j = 4;
-    while (!(mask == expected_mask && points == expected_points)) {
-        if (i > max_bytes) {
+    int found = (mask == expected_mask && points == expected_points) ? 1 : 0;
+    while (!found) {
+        if (read > max_bytes) {
             fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
             return EXIT_FAILURE;
         }
-        if (j == dp_size) {
-            int err = read_exact(fd, bytes, dp_size);
-            if (err < 0) {
-                fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
-                return EXIT_FAILURE;
-            }
-            else if (err < dp_size) {
-                fprintf(stderr, "Timeout waiting for binary header\n");
-                return EXIT_FAILURE;
-            }
-            j = 0;
+
+        // read new data into bytes
+        int err = read_exact(fd, bytes, dp_size);
+        if (err < 0) {
+            fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+        else if (err < dp_size) {
+            fprintf(stderr, "Timeout waiting for binary header\n");
+            return EXIT_FAILURE;
+        }
+        i = 0;
+
+        while (i < dp_size && !found) {
+            // Shift window
+            window[0] = window[1];
+            window[1] = window[2];
+            window[2] = window[3];
+            window[3] = bytes[i];
+            
+            // Update mask and points
+            mask = window[0] | (window[1] << 8);
+            points = window[2] | (window[3] << 8);
+
+            if (mask == expected_mask && points == expected_points)
+                found = 1;
+
+            i++;
         }
 
-        // Shift window
-        window[0] = window[1];
-        window[1] = window[2];
-        window[2] = window[3];
-        window[3] = bytes[j];
-        
-        // Update mask and points
-        mask = window[0] | (window[1] << 8);
-        points = window[2] | (window[3] << 8);
-
-        i++;
-        j++;
+        read+=dp_size;
     }
     
     // Pull the rest of the first datapoint
-    uint8_t remainder[j];
-    if (read_exact(fd, remainder, j) != j) {
+    uint8_t remainder[i];
+    if (read_exact(fd, remainder, i) != i) {
         fprintf(stderr, "Failed to finish reading first data point\n");
         return EXIT_FAILURE;
     }
 
-    int mid = dp_size - j;
-    for (int i = 0; i < mid; i++)
-        bytes[i] = bytes[i+j];
+    int mid = dp_size - i;
+    for (int j = 0; j < mid; j++)
+        bytes[j] = bytes[j+i];
 
-    for (int i = 0; i < j; i++)
-        bytes[mid+i] = remainder[i];
+    for (int j = 0; j < i; j++)
+        bytes[mid+j] = remainder[j];
 
     memcpy(first_point,bytes,dp_size);
     return EXIT_SUCCESS;
