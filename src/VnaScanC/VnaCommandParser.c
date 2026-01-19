@@ -7,6 +7,7 @@ long stop = 900000000;
 int nbr_scans = 5;
 int sweeps = 1;
 SweepMode sweep_mode = NUM_SWEEPS;
+int pps = 101;
 int num_vnas = 1;
 const char* default_port = "/dev/ttyACM0";
 const char **ports = (const char **)&default_port;
@@ -36,11 +37,11 @@ void scan() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, ports);
+        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports);
     }
     else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, ports);
+        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports);
     }
     else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
