@@ -213,7 +213,6 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
 int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
     int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
-
     uint8_t bytes[sizeof(struct nanovna_raw_datapoint)];
     
     // Read initial 4 bytes
@@ -221,18 +220,17 @@ int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16
         fprintf(stderr, "Failed to read initial header bytes\n");
         return EXIT_FAILURE;
     }
-
     uint8_t window[4] = {bytes[0],bytes[1],bytes[2],bytes[3]};
     
     // Check if we already have the header
     uint16_t mask = window[0] | (window[1] << 8);
     uint16_t points = window[2] | (window[3] << 8);
-    
-    int read = 4;
-    int i = 4;
     int found = (mask == expected_mask && points == expected_points) ? 1 : 0;
+    
+    int count = 4;
+    int i = 4;
     while (!found) {
-        if (read > max_bytes) {
+        if (count > max_bytes) {
             fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
             return EXIT_FAILURE;
         }
@@ -259,14 +257,12 @@ int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16
             // Update mask and points
             mask = window[0] | (window[1] << 8);
             points = window[2] | (window[3] << 8);
-
             if (mask == expected_mask && points == expected_points)
                 found = 1;
-
+                        
             i++;
         }
-
-        read+=dp_size;
+        count+=dp_size;
     }
     
     // Pull the rest of the first datapoint
