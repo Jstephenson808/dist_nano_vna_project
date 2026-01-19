@@ -210,53 +210,77 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
  * @param expected_points The expected points value (e.g., 101)
  * @return 1 if header found, 0 if timeout/not found, -1 on error
  */
-int find_binary_header(int fd, uint16_t expected_mask, uint16_t expected_points) {
-    uint8_t window[4] = {0};
+int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
+    int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
+    uint8_t bytes[sizeof(struct nanovna_raw_datapoint)];
     
     // Read initial 4 bytes
-    if (read_exact(fd, window, 4) != 4) {
+    if (read_exact(fd, bytes, dp_size) != dp_size) {
         fprintf(stderr, "Failed to read initial header bytes\n");
         return EXIT_FAILURE;
     }
+    uint8_t window[4] = {bytes[0],bytes[1],bytes[2],bytes[3]};
     
     // Check if we already have the header
     uint16_t mask = window[0] | (window[1] << 8);
     uint16_t points = window[2] | (window[3] << 8);
-    if (mask == expected_mask && points == expected_points) {
-        return EXIT_SUCCESS;
-    }
+    int found = (mask == expected_mask && points == expected_points) ? 1 : 0;
     
-    // Scan through the stream byte by byte
-    for (int i = 4; i < max_bytes; i++) {
-        uint8_t byte;
-        ssize_t n = read(fd, &byte, 1);
-        
-        if (n < 0) {
+    int count = 4;
+    int i = 4;
+    while (!found) {
+        if (count > max_bytes) {
+            fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
+            return EXIT_FAILURE;
+        }
+
+        // read new data into bytes
+        int err = read_exact(fd, bytes, dp_size);
+        if (err < 0) {
             fprintf(stderr, "Error reading header byte: %s\n", strerror(errno));
             return EXIT_FAILURE;
-        } else if (n == 0) {
+        }
+        else if (err < dp_size) {
             fprintf(stderr, "Timeout waiting for binary header\n");
             return EXIT_FAILURE;
         }
-        
-        // Shift window
-        window[0] = window[1];
-        window[1] = window[2];
-        window[2] = window[3];
-        window[3] = byte;
-        
-        // Check for header match
-        mask = window[0] | (window[1] << 8);
-        points = window[2] | (window[3] << 8);
-        
-        if (mask == expected_mask && points == expected_points) {
-            return EXIT_SUCCESS;  // Found header
+        i = 0;
+
+        while (i < dp_size && !found) {
+            // Shift window
+            window[0] = window[1];
+            window[1] = window[2];
+            window[2] = window[3];
+            window[3] = bytes[i];
+            
+            // Update mask and points
+            mask = window[0] | (window[1] << 8);
+            points = window[2] | (window[3] << 8);
+            if (mask == expected_mask && points == expected_points)
+                found = 1;
+                        
+            i++;
         }
+        count+=dp_size;
     }
     
-    fprintf(stderr, "Binary header not found after %d bytes\n", max_bytes);
-    return EXIT_FAILURE;
+    // Pull the rest of the first datapoint
+    uint8_t remainder[i];
+    if (read_exact(fd, remainder, i) != i) {
+        fprintf(stderr, "Failed to finish reading first data point\n");
+        return EXIT_FAILURE;
+    }
+
+    int mid = dp_size - i;
+    for (int j = 0; j < mid; j++)
+        bytes[j] = bytes[j+i];
+
+    for (int j = 0; j < i; j++)
+        bytes[mid+j] = remainder[j];
+
+    memcpy(first_point,bytes,dp_size);
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -324,21 +348,23 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
         return NULL;
     }
 
-    // Find binary header in response
-    int header_found = find_binary_header(port, MASK, POINTS);
-    if (header_found != EXIT_SUCCESS) {
-        fprintf(stderr, "Failed to find binary header\n");
-        return NULL;
-    }
-
-    // Receive data points
+    // Create struct for data points
     struct datapoint_nanoVNA_H *data = malloc(sizeof(struct datapoint_nanoVNA_H));
     if (!data) {
         fprintf(stderr, "Failed to allocate memory for data points\n");
         return NULL;
     }
 
-    for (int i = 0; i < POINTS; i++) {
+    // Find binary header and read first point
+    int header_found = find_binary_header(port, &data->point[0], MASK, POINTS);
+    if (header_found != EXIT_SUCCESS) {
+        fprintf(stderr, "Failed to find binary header\n");
+        free(data);
+        return NULL;
+    }
+
+    // Receive data points
+    for (int i = 1; i < POINTS; i++) {
         // Read raw data (20 bytes from NanoVNA)
         ssize_t bytes_read = read_exact(port, 
                                         (uint8_t*)&data->point[i], 
