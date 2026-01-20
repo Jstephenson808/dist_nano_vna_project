@@ -89,6 +89,13 @@ test:
     - build_parser
     - build_parser_tests
     - build_comms_tests
+  needs:
+    - build_docker_image
+    - build_scanner
+    - build_scanner_tests
+    - build_parser
+    - build_parser_tests
+    - build_comms_tests
   interruptible: true
   timeout: 5m
   script:
