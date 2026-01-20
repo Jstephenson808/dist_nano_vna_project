@@ -124,14 +124,9 @@ test:
 
 test_gui:
   stage: test
-  image: python:3.11
+  image: $CI_REGISTRY_IMAGE/ci-image:latest
   interruptible: true
   timeout: 5m
-  before_script:
-    # Install Xvfb and X11 dependencies for GUI testing
-    - apt-get update && apt-get install -y xvfb libx11-6 libxext6 libxrender1 libxi6 libxtst6 libxrandr2
-    - pip install --cache-dir .cache/pip -r src/VnaScanGUI/requirements.txt
-    - pip install --cache-dir .cache/pip pytest pytest-cov
   script:
     - echo "____ Running GUI Tests with Xvfb ____"
     # Start Xvfb (virtual display) and run tests
