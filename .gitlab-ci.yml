@@ -28,6 +28,8 @@ build_docker_image:
     changes:
       - Dockerfile
       - src/VnaScanGUI/requirements.txt
+  when: manual
+  allow_failure: false
 
 build_scanner:
   stage: build
@@ -96,7 +98,8 @@ test:
     - build_parser_tests
     - build_comms_tests
   needs:
-    - build_docker_image
+    - job: build_docker_image
+      optional: true
     - build_scanner
     - build_scanner_tests
     - build_parser
@@ -141,7 +144,8 @@ test_gui:
   stage: test
   image: $CI_REGISTRY_IMAGE/ci-image:latest
   needs:
-    - build_docker_image
+    - job: build_docker_image
+      optional: true
   interruptible: true
   timeout: 5m
   script:
