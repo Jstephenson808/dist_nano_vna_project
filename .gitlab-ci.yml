@@ -81,12 +81,12 @@ test:
 
 test_gui:
   stage: test
-  image: python:3.11
+  image: $CI_REGISTRY_IMAGE/ci-image:latest
   interruptible: true
   timeout: 5m
-  before_$CI_REGISTRY_IMAGE/ci-image:latest
-  interruptible: true
-  timeout: 5m
+  script:
+    - echo "____ Running GUI Tests with Xvfb ____"
+    # Start Xvfb (virtual display) and run tests
     - Xvfb :99 -screen 0 1024x768x24 &
     - export DISPLAY=:99
     - sleep 2
