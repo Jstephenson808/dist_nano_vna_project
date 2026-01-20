@@ -76,9 +76,19 @@ class VNAScannerGUI:
         self.time_limit.insert(0, "0")
         self.time_limit.pack(padx=10, pady=(0, 10), fill="x")
 
-        # Resolution Multiplier label
-        self.num_scans_label = ctk.CTkLabel(scan_frame, text="Resolution Multiplier:")
-        self.num_scans_label.pack(anchor="w", padx=10)
+        # Resolution Multiplier with tooltip
+        res_label_frame = ctk.CTkFrame(scan_frame, fg_color="transparent")
+        res_label_frame.pack(anchor="w", padx=10, fill="x")
+        
+        self.num_scans_label = ctk.CTkLabel(res_label_frame, text="Resolution Multiplier:", text_color=("gray10", "gray90"))
+        self.num_scans_label.pack(side="left")
+        
+        self.res_help_label = ctk.CTkLabel(res_label_frame, text="?", text_color=("#4a9eff", "#1f6aa5"),
+                                           font=("Roboto", 12, "bold"), cursor="hand2")
+        self.res_help_label.pack(side="left", padx=(5, 0))
+        self.res_help_label.bind("<Enter>", lambda e: self.show_tooltip(e, "Multiplies base 101 frequency points across defined bandwidth.\nExample: 2 = 202 points, 10 = 1010 points"))
+        self.res_help_label.bind("<Leave>", lambda e: self.hide_tooltip())
+        self.res_help_label.bind("<Button-1>", lambda e: self.show_tooltip(e, "Multiplies base 101 frequency points across defined bandwidth.\nExample: 2 = 202 points, 10 = 1010 points"))
         
         # Slider for resolution (0-100 scale)
         self.num_scans_slider = ctk.CTkSlider(scan_frame, from_=0, to=100, number_of_steps=100,
@@ -272,6 +282,29 @@ class VNAScannerGUI:
                 )
         except ValueError:
             self.resolution_display.configure(text="Multiplier: 1 (101 pts, spacing: enter valid frequencies)")
+    
+    def show_tooltip(self, event, text):
+        """Show tooltip near the cursor"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+        
+        x = event.widget.winfo_rootx() + 20
+        y = event.widget.winfo_rooty() + 20
+        
+        self.tooltip_window = ctk.CTkToplevel(self.root)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        
+        label = ctk.CTkLabel(self.tooltip_window, text=text, justify="left",
+                            fg_color=("#ffffe0", "#3a3a3a"), corner_radius=6,
+                            text_color=("black", "white"), padx=10, pady=5)
+        label.pack()
+    
+    def hide_tooltip(self):
+        """Hide tooltip"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
     def detect_vnas(self):
         """Auto-detect connected VNA devices"""
