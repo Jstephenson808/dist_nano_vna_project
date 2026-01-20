@@ -366,6 +366,7 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop) 
     int header_found = find_binary_header(port, &data->point[0], MASK, POINTS);
     if (header_found != EXIT_SUCCESS) {
         fprintf(stderr, "Failed to find binary header\n");
+        free(data->point);
         free(data);
         return NULL;
     }
