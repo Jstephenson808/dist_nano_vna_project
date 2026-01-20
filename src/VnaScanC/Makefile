@@ -17,7 +17,10 @@ MULTI_LINK = -lpthread -lm
 MULTI_TEST_NAME = ${TEST_DIR}/Test${MULTI_NAME}
 MULTI_TEST_SRC_FILES = ${UNITY_SOURCE} ${MULTI_NAME}.c ${MULTI_TEST_NAME}.c
 
-all: scan scan-multithreaded scan-multithreaded-test
+LIB_NAME = lib${MULTI_NAME}.so
+LIB_CFLAGS = -fPIC -shared
+
+all: scan scan-multithreaded scan-multithreaded-test lib
 
 scan:
 	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
@@ -29,8 +32,11 @@ scan-multithreaded-test:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} ${MULTI_LINK}
 	- ./${MULTI_TEST_NAME}
 
+lib:
+	$(CC) $(CFLAGS) $(LIB_CFLAGS) ${MULTI_NAME}.c -o ${LIB_NAME} ${MULTI_LINK}
+
 debugging-symbols:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} -g ${MULTI_LINK}
 
 clean:
-	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME}
+	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME} ${LIB_NAME}

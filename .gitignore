@@ -5,4 +5,12 @@ VnaScan
 VnaScanMultithreaded
 TestVnaScanMultithreaded
 *.out
+
+# Shared libraries
+*.so
+*.dylib
+*.dll
+
+# Python env
 .venv
+.env
