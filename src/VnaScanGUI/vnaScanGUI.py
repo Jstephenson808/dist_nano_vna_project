@@ -81,7 +81,8 @@ class VNAScannerGUI:
         self.num_scans_label.pack(anchor="w", padx=10)
         
         # Slider for resolution (0-100 scale)
-        self.num_scans_slider = ctk.CTkSlider(scan_frame, from_=0, to=100, number_of_steps=100)
+        self.num_scans_slider = ctk.CTkSlider(scan_frame, from_=0, to=100, number_of_steps=100,
+                                              command=self.update_resolution_display)
         self.num_scans_slider.set(0)  # Start at multiplier=1
         self.num_scans_slider.pack(padx=10, pady=(0, 5), fill="x")
         
@@ -192,6 +193,63 @@ class VNAScannerGUI:
         """Add message to log"""
         self.log_text.insert("end", f"{message}\n")
         self.log_text.see("end")
+    
+    def slider_to_multiplier(self, slider_value):
+        """Convert slider position (0-100) to multiplier using logarithmic scale"""
+        try:
+            start = int(self.start_freq.get())
+            stop = int(self.stop_freq.get())
+            bandwidth = stop - start
+            if bandwidth <= 0:
+                return 1
+            
+            # Calculate theoretical max (1 Hz spacing)
+            max_useful = max(1, bandwidth // 101)
+            
+            # Limit to practical range (avoid extreme values)
+            max_value = min(max_useful, 100000)
+            
+            # Logarithmic mapping: 0 → 1, 100 → max_value
+            if max_value <= 1:
+                return 1
+            
+            import math
+            normalized = slider_value / 100.0  # 0.0 to 1.0
+            multiplier = 10 ** (normalized * math.log10(max_value))
+            return max(1, int(round(multiplier)))
+        except (ValueError, ZeroDivisionError):
+            return 1
+    
+    def update_resolution_display(self, slider_value):
+        """Update the resolution display with current multiplier and frequency spacing"""
+        try:
+            multiplier = self.slider_to_multiplier(self.num_scans_slider.get())
+            total_points = multiplier * 101
+            
+            start = int(self.start_freq.get())
+            stop = int(self.stop_freq.get())
+            bandwidth = stop - start
+            
+            if bandwidth > 0 and total_points > 0:
+                spacing_hz = bandwidth / total_points
+                
+                # Format spacing nicely
+                if spacing_hz >= 1e6:
+                    spacing_str = f"{spacing_hz/1e6:.2f} MHz"
+                elif spacing_hz >= 1e3:
+                    spacing_str = f"{spacing_hz/1e3:.2f} kHz"
+                else:
+                    spacing_str = f"{spacing_hz:.1f} Hz"
+                
+                self.resolution_display.configure(
+                    text=f"Multiplier: {multiplier} ({total_points} pts, spacing: {spacing_str})"
+                )
+            else:
+                self.resolution_display.configure(
+                    text=f"Multiplier: {multiplier} ({total_points} pts, spacing: invalid range)"
+                )
+        except ValueError:
+            self.resolution_display.configure(text="Multiplier: 1 (101 pts, spacing: enter valid frequencies)")
 
     def detect_vnas(self):
         """Auto-detect connected VNA devices"""
@@ -215,8 +273,10 @@ class VNAScannerGUI:
 
     def run(self):
         """Start the GUI main loop"""
+        self.update_resolution_display(1)
         self.root.mainloop()
 
 if __name__ == "__main__":
     app = VNAScannerGUI()
     app.run()
+    
