@@ -76,10 +76,19 @@ class VNAScannerGUI:
         self.time_limit.insert(0, "0")
         self.time_limit.pack(padx=10, pady=(0, 10), fill="x")
 
-        ctk.CTkLabel(scan_frame, text="Number of Scans:").pack(anchor="w", padx=10)
-        self.num_scans = ctk.CTkEntry(scan_frame, placeholder_text="10")
-        self.num_scans.insert(0, "10")
-        self.num_scans.pack(padx=10, pady=(0, 10), fill="x")
+        # Resolution Multiplier label
+        self.num_scans_label = ctk.CTkLabel(scan_frame, text="Resolution Multiplier:")
+        self.num_scans_label.pack(anchor="w", padx=10)
+        
+        # Slider for resolution (0-100 scale)
+        self.num_scans_slider = ctk.CTkSlider(scan_frame, from_=0, to=100, number_of_steps=100)
+        self.num_scans_slider.set(0)  # Start at multiplier=1
+        self.num_scans_slider.pack(padx=10, pady=(0, 5), fill="x")
+        
+        # Display current value and frequency spacing
+        self.resolution_display = ctk.CTkLabel(scan_frame, text="Multiplier: 1 (101 pts)",
+                                               font=("Roboto", 10), text_color="gray60")
+        self.resolution_display.pack(anchor="w", padx=10, pady=(0, 10))
         
         # Dynamic sweep configuration
         self.sweep_label = ctk.CTkLabel(scan_frame, text="Number of Sweeps:")
