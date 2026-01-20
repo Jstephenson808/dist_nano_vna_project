@@ -91,11 +91,15 @@ class VNAScannerGUI:
                                                font=("Roboto", 10), text_color="gray60")
         self.resolution_display.pack(anchor="w", padx=10, pady=(0, 10))
         
-        # Dynamic sweep configuration
-        self.sweep_label = ctk.CTkLabel(scan_frame, text="Number of Sweeps:")
-        self.sweep_label.pack(anchor="w", padx=10)
+        # Sweep mode checkbox
+        self.sweep_mode = ctk.CTkCheckBox(scan_frame, text="Sweep mode (fixed number of sweeps)", command=self.toggle_sweep_mode)
+        self.sweep_mode.pack(anchor="w", padx=10, pady=(5, 10))
         
-        self.num_sweeps = ctk.CTkEntry(scan_frame, placeholder_text="1")
+        # Number of sweeps
+        self.num_sweeps_label = ctk.CTkLabel(scan_frame, text="Number of Sweeps:", text_color="gray50")
+        self.num_sweeps_label.pack(anchor="w", padx=10)
+        
+        self.num_sweeps = ctk.CTkEntry(scan_frame, placeholder_text="1", state="disabled")
         self.num_sweeps.insert(0, "1")
         self.num_sweeps.pack(padx=10, pady=(0, 10), fill="x")
 
@@ -193,6 +197,23 @@ class VNAScannerGUI:
         """Add message to log"""
         self.log_text.insert("end", f"{message}\n")
         self.log_text.see("end")
+    
+    def toggle_sweep_mode(self):
+        """Toggle between continuous scan and fixed sweep count mode"""
+        if self.sweep_mode.get() == 1:
+            # Sweep mode enabled - enable sweeps field, disable time limit
+            self.num_sweeps.configure(state="normal", text_color=("gray10", "gray90"))
+            self.num_sweeps_label.configure(text_color=("gray10", "gray90"))
+            
+            self.time_limit.configure(state="disabled", text_color="gray50")
+            self.time_limit_label.configure(text_color="gray50")
+        else:
+            # Continuous scan mode - disable sweeps field, enable time limit
+            self.num_sweeps.configure(state="disabled", text_color="gray50")
+            self.num_sweeps_label.configure(text_color="gray50")
+            
+            self.time_limit.configure(state="normal", text_color=("gray10", "gray90"))
+            self.time_limit_label.configure(text_color=("gray10", "gray90"))
     
     def slider_to_multiplier(self, slider_value):
         """Convert slider position (0-100) to multiplier using logarithmic scale"""
