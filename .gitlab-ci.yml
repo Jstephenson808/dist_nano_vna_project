@@ -1,4 +1,5 @@
 stages:
+  - docker
   - build
   - test
 
@@ -7,6 +8,20 @@ cache:
   paths:
     - .cache/pip
   key: ${CI_COMMIT_REF_SLUG}
+
+build_docker_image:
+  stage: docker
+  image: $CI_REGISTRY_IMAGE/ci-imageker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
+    - docker push $CI_REGISTRY_IMAGE/ci-image:latest
+  only:
+    changes:
+      - Dockerfile
+      - src/VnaScanGUI/requirements.txt
 
 build_scanner:
   stage: build
@@ -22,7 +37,7 @@ build_scanner:
 
 build_scanner_tests:
   stage: build
-  image: gcc:latest
+  image: $CI_REGISTRY_IMAGE/ci-image:latest
   script:
     - cd src/CliApp
     - make TestVnaScanMultithreaded CC=gcc  
@@ -67,7 +82,7 @@ build_comms_tests:
 
 test:
   stage: test
-  image: python:3.11
+  image: $CI_REGISTRY_IMAGE/ci-image:latest
   dependencies:
     - build_scanner
     - build_scanner_tests
@@ -76,9 +91,6 @@ test:
     - build_comms_tests
   interruptible: true
   timeout: 5m
-  before_script:
-    - apt-get update && apt-get install -y socat lsof
-    - pip install --cache-dir .cache/pip pyserial
   script:
     - echo "____ Starting Virtual Serial Ports ____"
     - socat -d -d pty,raw,echo=0,link=/tmp/vna0_master pty,raw,echo=0,link=/tmp/vna0_slave 2>&1 &
@@ -113,14 +125,9 @@ test_gui:
   image: python:3.11
   interruptible: true
   timeout: 5m
-  before_script:
-    # Install Xvfb and X11 dependencies for GUI testing
-    - apt-get update && apt-get install -y xvfb libx11-6 libxext6 libxrender1 libxi6 libxtst6 libxrandr2
-    - pip install --cache-dir .cache/pip -r src/VnaScanGUI/requirements.txt
-    - pip install --cache-dir .cache/pip pytest pytest-cov
-  script:
-    - echo "____ Running GUI Tests with Xvfb ____"
-    # Start Xvfb (virtual display) and run tests
+  before_$CI_REGISTRY_IMAGE/ci-image:latest
+  interruptible: true
+  timeout: 5m
     - Xvfb :99 -screen 0 1024x768x24 &
     - export DISPLAY=:99
     - sleep 2
