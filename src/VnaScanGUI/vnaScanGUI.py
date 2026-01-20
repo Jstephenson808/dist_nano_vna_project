@@ -75,6 +75,7 @@ class VNAScannerGUI:
         self.time_limit = ctk.CTkEntry(scan_frame, placeholder_text="0")
         self.time_limit.insert(0, "0")
         self.time_limit.pack(padx=10, pady=(0, 10), fill="x")
+        self.time_limit.bind("<KeyRelease>", lambda e: self.update_scan_button_text())
 
         # Resolution Multiplier with tooltip
         res_label_frame = ctk.CTkFrame(scan_frame, fg_color="transparent")
@@ -116,7 +117,7 @@ class VNAScannerGUI:
         # Start/Stop buttons in scan control panel
         self.start_button = ctk.CTkButton(
             scan_frame, 
-            text="Start Scan", 
+            text="Start Continuous Scan", 
             fg_color=("#16A500", "#14A007"),
             hover_color="#043100",
             font=("Roboto", 14, "bold")
@@ -225,6 +226,7 @@ class VNAScannerGUI:
             
             self.time_limit.configure(state="normal", text_color=("gray10", "gray90"))
             self.time_limit_label.configure(text_color=("gray10", "gray90"))
+        self.update_scan_button_text()
     
     def slider_to_multiplier(self, slider_value):
         """Convert slider position (0-100) to multiplier using logarithmic scale"""
@@ -282,6 +284,19 @@ class VNAScannerGUI:
                 )
         except ValueError:
             self.resolution_display.configure(text="Multiplier: 1 (101 pts, spacing: enter valid frequencies)")
+    
+    def update_scan_button_text(self):
+        """Update the start button text based on time limit and sweep mode"""
+        try:
+            time_limit = int(self.time_limit.get() or "0")
+            if self.sweep_mode.get() == 1:
+                self.start_button.configure(text="Start Sweep Scan")
+            elif time_limit > 0:
+                self.start_button.configure(text=f"Scan for {time_limit} seconds")
+            else:
+                self.start_button.configure(text="Start Continuous Scan")
+        except ValueError:
+            self.start_button.configure(text="Start Continuous Scan")
     
     def show_tooltip(self, event, text):
         """Show tooltip near the cursor"""
