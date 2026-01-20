@@ -43,6 +43,9 @@ void help() {
         vnas - number of VNAs to use\n\
     For example: set start 100000000\n");
     }
+    else if (strcmp(tok,"list") == 0) {
+        printf("Lists the current settings used for the scan.\n");
+    }
     else {
         printf("Usage: help [command]\nFor list of possible commands type 'help'.\n");
     }
