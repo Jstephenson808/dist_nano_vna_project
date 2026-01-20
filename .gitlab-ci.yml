@@ -22,12 +22,31 @@ build_docker_image:
     - docker:dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
-    - docker push $CI_REGISTRY_IMAGE/ci-image:latest
-  only:
-    changes:
-      - Dockerfile
-      - src/VnaScanGUI/requirements.txt
+    - |
+      # Try to pull existing image
+      if docker pull $CI_REGISTRY_IMAGE/ci-image:latest 2>/dev/null; then
+        echo "Image exists in registry"
+        if [ "$FORCE_REBUILD" = "true" ]; then
+          echo "Dockerfile or requirements.txt changed - rebuilding..."
+          docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
+          docker push $CI_REGISTRY_IMAGE/ci-image:latest
+        else
+          echo "No changes detected - skipping rebuild"
+        fi
+      else
+        echo "Image not found in registry - building..."
+        docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
+        docker push $CI_REGISTRY_IMAGE/ci-image:latest
+      fi
+  rules:
+    # When Dockerfile or requirements.txt changes, force rebuild
+    - changes:
+        - Dockerfile
+        - src/VnaScanGUI/requirements.txt
+      variables:
+        FORCE_REBUILD: "true"
+    # Otherwise, run anyway to check if image exists
+    - when: on_success
 
 build_scanner:
   stage: build
