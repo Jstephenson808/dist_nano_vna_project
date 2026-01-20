@@ -25,13 +25,16 @@ MULTI_TEST_SRC_FILES = ${UNITY_SOURCE} $(MULTI_SRC_FILES) ${MULTI_TEST_NAME}.c
 
 MULTI_MAIN_SRC_FILES = $(MULTI_SRC_FILES) ${MULTI_NAME}Main.c
 
+LIB_NAME = lib${MULTI_NAME}.so
+LIB_CFLAGS = -fPIC -shared
+
 PARSER_NAME = VnaCommandParser
 PARSER_SRC_FILES = $(PARSER_NAME).c $(MULTI_SRC_FILES)
 PARSER_LINK = -lpthread -lm
 PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
 PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c $(PARSER_SRC_FILES)
 
-all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser
+all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser lib
 
 VnaScanMultithreaded:
 	$(CC) $(CFLAGS) $(MULTI_MAIN_SRC_FILES) -o ${MULTI_NAME} ${MULTI_LINK}

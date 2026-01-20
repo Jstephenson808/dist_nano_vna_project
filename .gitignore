@@ -10,5 +10,12 @@ TestVnaCommandParser
 TestVnaCommunication
 test/tmp/*
 *.out
+
+# Shared libraries
+*.so
+*.dylib
+*.dll
+
+# Python env
 .venv
 __pycache__
