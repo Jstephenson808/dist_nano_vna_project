@@ -28,8 +28,6 @@ build_docker_image:
     changes:
       - Dockerfile
       - src/VnaScanGUI/requirements.txt
-  when: manual
-  allow_failure: false
 
 build_scanner:
   stage: build
