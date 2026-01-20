@@ -54,6 +54,8 @@ test:
     - build_tests
   needs:
     - build_docker_image
+    - build_scanner
+    - build_tests
   interruptible: true
   timeout: 5m
   script:
