@@ -56,11 +56,13 @@ class VNAScannerGUI:
         self.start_freq = ctk.CTkEntry(freq_frame, placeholder_text="50000000")
         self.start_freq.insert(0, "50000000")
         self.start_freq.pack(padx=10, pady=(0, 10), fill="x")
+        self.start_freq.bind("<KeyRelease>", lambda e: self.update_resolution_display(None))
         
         ctk.CTkLabel(freq_frame, text="Stop (Hz):").pack(anchor="w", padx=10)
         self.stop_freq = ctk.CTkEntry(freq_frame, placeholder_text="900000000")
         self.stop_freq.insert(0, "900000000")
         self.stop_freq.pack(padx=10, pady=(0, 10), fill="x")
+        self.stop_freq.bind("<KeyRelease>", lambda e: self.update_resolution_display(None))
         
         # Scan Control
         scan_frame = ctk.CTkFrame(self.left_panel)
@@ -154,7 +156,7 @@ class VNAScannerGUI:
         self.ports_text.pack(padx=10, pady=(0, 10), fill="x")
         
         # Utility buttons
-        clear_btn = ctk.CTkButton(self.left_panel, text="Clear Data")
+        clear_btn = ctk.CTkButton(self.left_panel, text="Clear Data", command=self.clear_data)
         clear_btn.pack(pady=(0, 10), padx=20, fill="x")
         
         touchstone_btn = ctk.CTkButton(self.left_panel, text="Read Touchstone")
@@ -186,6 +188,7 @@ class VNAScannerGUI:
         self.plot_type = ctk.CTkOptionMenu(
             plot_control,
             values=["S11 Magnitude (dB)", "S21 Magnitude (dB)"],
+            command=lambda x: self.update_plot()
         )
         self.plot_type.set("S11 Magnitude (dB)")
         self.plot_type.pack(side="left", padx=10)
@@ -321,6 +324,22 @@ class VNAScannerGUI:
             self.tooltip_window.destroy()
             self.tooltip_window = None
 
+    def clear_data(self):
+        """Clear all scan data"""
+        self.ax.clear()
+        self.ax.set_xlabel("Frequency (MHz)")
+        self.ax.set_ylabel("Magnitude (dB)")
+        self.ax.set_title("S-Parameter Data")
+        self.ax.grid(True, alpha=0.3)
+        self.canvas.draw()
+        self.stats_label.configure(text="Points: 0")
+        self.log("Data cleared")
+    
+    def update_plot(self):
+        """Update plot with current data (stub for now)"""
+        # Will be implemented when we add scan data collection
+        pass
+    
     def detect_vnas(self):
         """Auto-detect connected VNA devices"""
         ports = sorted(glob.glob("/dev/ttyACM*"))
@@ -336,6 +355,22 @@ class VNAScannerGUI:
         self.ports_text.insert("1.0", "\n".join(ports))
         
         self.log(f"Detected {len(ports)} VNA device(s): {', '.join(ports)}")
+    
+    def clear_data(self):
+        """Clear all scan data"""
+        self.ax.clear()
+        self.ax.set_xlabel("Frequency (MHz)")
+        self.ax.set_ylabel("Magnitude (dB)")
+        self.ax.set_title("S-Parameter Data")
+        self.ax.grid(True, alpha=0.3)
+        self.canvas.draw()
+        self.stats_label.configure(text="Points: 0")
+        self.log("Data cleared")
+    
+    def update_plot(self):
+        """Update plot with current data (stub for now)"""
+        # Will be implemented when we add scan data collection
+        pass
         
     def change_theme(self, theme):
         """Change appearance theme"""
@@ -345,6 +380,10 @@ class VNAScannerGUI:
         """Start the GUI main loop"""
         self.update_resolution_display(1)
         self.root.mainloop()
+
+
+
+
 
 if __name__ == "__main__":
     app = VNAScannerGUI()
