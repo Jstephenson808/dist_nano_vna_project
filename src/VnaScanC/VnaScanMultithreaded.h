@@ -20,7 +20,6 @@
 #include <pthread.h>
 #include <sys/time.h>
 
-#define POINTS 101 // number of points per scan throughout program
 #define MASK 135 // mask passed to VNAs, defining how to format output
 #define N 100 // size of bounded buffer
 
@@ -43,7 +42,7 @@ struct nanovna_raw_datapoint {
 struct datapoint_nanoVNA_H {
     int vna_id;                           // Which VNA produced this data
     struct timeval send_time, receive_time;
-    struct nanovna_raw_datapoint point[POINTS];    // Raw measurement from device
+    struct nanovna_raw_datapoint *point;    // Raw measurement from device
 };
 
 /**
@@ -162,7 +161,7 @@ struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
  *
  * Accesses buffer according to the producer-consumer problem
  * Computes step (frequency distance between scans) from start stop and points,
- * then pulls scans from NanoVNA in increments of 101 points and appends to buffer.
+ * then pulls scans from NanoVNA in increments of pps points and appends to buffer.
  * 
  * @param args pointer to scan_producer_args struct used to pass arguments into this function
  */
@@ -214,12 +213,13 @@ void* scan_consumer(void *args);
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
+ * @param pps Number of points per scan
  * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
 typedef enum {
     NUM_SWEEPS,
     TIME
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, const char **ports);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports);
 
 #endif
