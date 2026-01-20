@@ -5,50 +5,15 @@ stages:
 # Global variables
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  # Docker-in-Docker settings
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
-  DOCKER_DRIVER: overlay2
+  APT_CACHE_DIR: "$CI_PROJECT_DIR/.cache/apt"
+  DEBIAN_FRONTEND: noninteractive
 
-# Cache pip packages for faster runs
+# Cache pip and apt packages for faster runs
 cache:
   paths:
     - .cache/pip
     - .cache/apt
   key: ${CI_COMMIT_REF_SLUG}
-
-build_docker_image:
-  stage: docker
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - |
-      # Try to pull existing image
-      if docker pull $CI_REGISTRY_IMAGE/ci-image:latest 2>/dev/null; then
-        echo "Image exists in registry"
-        if [ "$FORCE_REBUILD" = "true" ]; then
-          echo "Dockerfile or requirements.txt changed - rebuilding..."
-          docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
-          docker push $CI_REGISTRY_IMAGE/ci-image:latest
-        else
-          echo "No changes detected - skipping rebuild"
-        fi
-      else
-        echo "Image not found in registry - building..."
-        docker build -t $CI_REGISTRY_IMAGE/ci-image:latest .
-        docker push $CI_REGISTRY_IMAGE/ci-image:latest
-      fi
-  rules:
-    # When Dockerfile or requirements.txt changes, force rebuild
-    - changes:
-        - Dockerfile
-        - src/VnaScanGUI/requirements.txt
-      variables:
-        FORCE_REBUILD: "true"
-    # Otherwise, run anyway to check if image exists
-    - when: on_success
 
 build_scanner:
   stage: build
@@ -117,8 +82,6 @@ test:
     - build_parser_tests
     - build_comms_tests
   needs:
-    - job: build_docker_image
-      optional: true
     - build_scanner
     - build_scanner_tests
     - build_parser
@@ -161,12 +124,14 @@ test:
 
 test_gui:
   stage: test
-  image: $CI_REGISTRY_IMAGE/ci-image:latest
-  needs:
-    - job: build_docker_image
-      optional: true
+  image: python:3.11
   interruptible: true
-  timeout: 5m
+  timeout: 10m
+  before_script:
+    - mkdir -p $APT_CACHE_DIR
+    - apt-get update && apt-get -o dir::cache::archives="$APT_CACHE_DIR" install -y xvfb libx11-6 libxext6 libxrender1 libxi6 libxtst6 libxrandr2
+    - pip install pytest pytest-cov pyserial
+    - pip install -r src/VnaScanGUI/requirements.txt
   script:
     - echo "____ Running GUI Tests with Xvfb ____"
     # Start Xvfb (virtual display) and run tests
