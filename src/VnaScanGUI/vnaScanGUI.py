@@ -62,12 +62,12 @@ class VNAScannerGUI:
         self.stop_freq.insert(0, "900000000")
         self.stop_freq.pack(padx=10, pady=(0, 10), fill="x")
         
-        # Scan parameters
+        # Scan Control
         scan_frame = ctk.CTkFrame(self.left_panel)
         scan_frame.pack(pady=10, padx=20, fill="x")
 
         
-        ctk.CTkLabel(scan_frame, text="Scan Parameters", font=("Roboto", 14, "bold")).pack(pady=(10, 5))
+        ctk.CTkLabel(scan_frame, text="Scan Control", font=("Roboto", 14, "bold")).pack(pady=(10, 5))
         
         # Time limit (0 = continuous)
         self.time_limit_label = ctk.CTkLabel(scan_frame, text="Time Limit (seconds, 0=continuous):")
@@ -102,6 +102,26 @@ class VNAScannerGUI:
         self.num_sweeps = ctk.CTkEntry(scan_frame, placeholder_text="1", state="disabled")
         self.num_sweeps.insert(0, "1")
         self.num_sweeps.pack(padx=10, pady=(0, 10), fill="x")
+        
+        # Start/Stop buttons in scan control panel
+        self.start_button = ctk.CTkButton(
+            scan_frame, 
+            text="Start Scan", 
+            fg_color=("#16A500", "#14A007"),
+            hover_color="#043100",
+            font=("Roboto", 14, "bold")
+        )
+        self.start_button.pack(pady=10, padx=10, fill="x")
+        
+        self.stop_button = ctk.CTkButton(
+            scan_frame,
+            text="Stop Scan",
+            fg_color=("#AE0006", "#B80006"),
+            hover_color="#4E0003",
+            state="disabled",
+            font=("Roboto", 14)
+        )
+        self.stop_button.pack(pady=(0, 10), padx=10, fill="x")
 
         # VNA configuration
         vna_frame = ctk.CTkFrame(self.left_panel)
@@ -122,26 +142,7 @@ class VNAScannerGUI:
         self.ports_text.insert("1.0", "/dev/ttyACM0\n/dev/ttyACM1")
         self.ports_text.pack(padx=10, pady=(0, 10), fill="x")
         
-        # Control buttons
-        self.start_button = ctk.CTkButton(
-            self.left_panel, 
-            text="Start Scan", 
-            fg_color=("#16A500", "#14A007"),
-            hover_color="#043100",
-            font=("Roboto", 14, "bold")
-        )
-        self.start_button.pack(pady=10, padx=20, fill="x")
-        
-        self.stop_button = ctk.CTkButton(
-            self.left_panel,
-            text="Stop Scan",
-            fg_color=("#AE0006", "#B80006"),
-            hover_color="#4E0003",
-            state="disabled",
-            font=("Roboto", 14)
-        )
-        self.stop_button.pack(pady=(0, 10), padx=20, fill="x")
-        
+        # Utility buttons
         clear_btn = ctk.CTkButton(self.left_panel, text="Clear Data")
         clear_btn.pack(pady=(0, 10), padx=20, fill="x")
         
