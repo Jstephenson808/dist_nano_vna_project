@@ -12,6 +12,9 @@ class VNAScannerGUI:
         self.root = ctk.CTk()
         self.root.title("VNA Scanner - Multi-threaded Control")
         self.root.geometry("1400x1400")
+        
+        # State
+        self.tooltip_window = None  # For help tooltips
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -66,8 +69,12 @@ class VNAScannerGUI:
         
         ctk.CTkLabel(scan_frame, text="Scan Parameters", font=("Roboto", 14, "bold")).pack(pady=(10, 5))
         
-        self.time_mode = ctk.CTkCheckBox(scan_frame, text="Time mode")
-        self.time_mode.pack(anchor="w", padx=10, pady=(5, 10))
+        # Time limit (0 = continuous)
+        self.time_limit_label = ctk.CTkLabel(scan_frame, text="Time Limit (seconds, 0=continuous):")
+        self.time_limit_label.pack(anchor="w", padx=10)
+        self.time_limit = ctk.CTkEntry(scan_frame, placeholder_text="0")
+        self.time_limit.insert(0, "0")
+        self.time_limit.pack(padx=10, pady=(0, 10), fill="x")
 
         ctk.CTkLabel(scan_frame, text="Number of Scans:").pack(anchor="w", padx=10)
         self.num_scans = ctk.CTkEntry(scan_frame, placeholder_text="10")
