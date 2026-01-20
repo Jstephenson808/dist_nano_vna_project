@@ -19,3 +19,16 @@ test/tmp/*
 # Python env
 .venv
 .env
+
+# Python bytecode and cache
+*.pyc
+*.pyo
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest cache
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
