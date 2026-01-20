@@ -5,10 +5,12 @@ stages:
 # Global variables
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  APT_CACHE_DIR: "$CI_PROJECT_DIR/.cache/apt"
-  DEBIAN_FRONTEND: noninteractive
+  # Docker-in-Docker settings
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
 
-# Cache pip and apt packages for faster runs
+# Cache pip packages for faster runs
 cache:
   paths:
     - .cache/pip
