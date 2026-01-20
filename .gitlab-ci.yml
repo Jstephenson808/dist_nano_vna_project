@@ -96,6 +96,7 @@ test:
     - build_parser_tests
     - build_comms_tests
   needs:
+    - build_docker_image
     - build_scanner
     - build_scanner_tests
     - build_parser
