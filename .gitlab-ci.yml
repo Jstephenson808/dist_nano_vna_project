@@ -3,6 +3,14 @@ stages:
   - build
   - test
 
+# Global variables
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # Docker-in-Docker settings
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
 # Cache pip packages for faster runs
 cache:
   paths:
