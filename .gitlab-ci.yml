@@ -11,7 +11,7 @@ cache:
 
 build_docker_image:
   stage: docker
-  image: $CI_REGISTRY_IMAGE/ci-imageker:latest
+  image: docker:latest
   services:
     - docker:dind
   script:
@@ -37,7 +37,7 @@ build_scanner:
 
 build_tests:
   stage: build
-  image: $CI_REGISTRY_IMAGE/ci-image:latest
+  image: gcc:latest
   script:
     - cd src/VnaScanC
     - make scan-multithreaded-test CC=gcc  
@@ -52,6 +52,8 @@ test:
   dependencies:
     - build_scanner
     - build_tests
+  needs:
+    - build_docker_image
   interruptible: true
   timeout: 5m
   script:
@@ -82,6 +84,8 @@ test:
 test_gui:
   stage: test
   image: $CI_REGISTRY_IMAGE/ci-image:latest
+  needs:
+    - build_docker_image
   interruptible: true
   timeout: 5m
   script:
