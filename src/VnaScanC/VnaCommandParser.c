@@ -19,7 +19,8 @@ void help() {
     scan: starts a scan with current settings\n\
     exit: safely exits the program\n\
     help: prints a list of all available commands\n\
-    set: sets a parameter to a new value\n"
+    set: sets a parameter to a new value\n\
+    list: lists the values of the current settings (can be changed using the set setting)\n"
         );
     }
     else if (strcmp(tok,"scan") == 0) {
@@ -116,6 +117,18 @@ void set() {
 }
 
 
+void list() {
+   printf("\
+    Current settings:\n\
+        Start frequency: %ld Hz\n\
+        Stop frequency: %ld Hz\n\
+        Number of scans: %d\n\
+        Number of sweeps: %d\n\
+        Points per scan: %d\n\
+        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, num_vnas);
+}
+
+
 int readCommand() {
     char buff[50];
     fgets(buff, sizeof(buff), stdin);
@@ -136,6 +149,9 @@ int readCommand() {
     }
     else if (strcmp(tok,"set") == 0) {
         set();
+    }
+    else if (strcmp(tok, "list") == 0) {
+        list();
     }
     else {
         printf("Command not recognised. Type 'help' for list of available commands.\n");
