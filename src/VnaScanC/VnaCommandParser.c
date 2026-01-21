@@ -1,5 +1,63 @@
 #include "VnaScanMultithreaded.h"
 #include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+// Validation function to check if token is a valid integer
+int isValidInt(const char* tok) {
+    if (tok == NULL || tok[0] == '\0') {
+        return 0;
+    }
+    
+    int i = 0;
+    // Handle optional negative sign
+    if (tok[0] == '-' || tok[0] == '+') {
+        i = 1;
+    }
+    
+    // Check if at least one digit exists after sign
+    if (tok[i] == '\0') {
+        return 0;
+    }
+    
+    // Check that all remaining characters are digits
+    while (tok[i] != '\0') {
+        if (!isdigit(tok[i])) {
+            return 0;
+        }
+        i++;
+    }
+    
+    return 1;
+}
+
+// Validation function to check if token is a valid long
+int isValidLong(const char* tok) {
+    if (tok == NULL || tok[0] == '\0') {
+        return 0;
+    }
+    
+    int i = 0;
+    // Handle optional negative sign
+    if (tok[0] == '-' || tok[0] == '+') {
+        i = 1;
+    }
+    
+    // Check if at least one digit exists after sign
+    if (tok[i] == '\0') {
+        return 0;
+    }
+    
+    // Check that all remaining characters are digits
+    while (tok[i] != '\0') {
+        if (!isdigit(tok[i])) {
+            return 0;
+        }
+        i++;
+    }
+    
+    return 1;
+}
 
 // defaults
 long start = 50000000;
@@ -79,6 +137,11 @@ void set() {
             return;
         }
         
+        if (!isValidLong(tok)) {
+            printf("ERROR: Start frequency must be a number.\n");
+            return;
+        }
+        
         long val = atol(tok);
         
         if (val <= 0) {
@@ -101,6 +164,11 @@ void set() {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             printf("ERROR: No value provided for stop frequency.\n");
+            return;
+        }
+        
+        if (!isValidLong(tok)) {
+            printf("ERROR: Stop frequency must be a number.\n");
             return;
         }
 
@@ -129,6 +197,11 @@ void set() {
             return;
         }
         
+        if (!isValidInt(tok)) {
+            printf("ERROR: Number of scans must be a valid integer.\n");
+            return;
+        }
+        
         int val = atoi(tok);
 
         if (val <= 0) {
@@ -146,6 +219,11 @@ void set() {
             return;
         }
         
+        if (!isValidInt(tok)) {
+            printf("ERROR: Number of sweeps must be a valid integer.\n");
+            return;
+        }
+        
         int val = atoi(tok);
 
         if (val <= 0) {
@@ -160,6 +238,11 @@ void set() {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             printf("ERROR: No value provided for points per scan.\n");
+            return;
+        }
+        
+        if (!isValidInt(tok)) {
+            printf("ERROR: Points per scan must be a valid integer.\n");
             return;
         }
 
