@@ -12,6 +12,7 @@ int num_vnas = 1;
 const char* default_port = "/dev/ttyACM0";
 const char **ports = (const char **)&default_port;
 
+
 void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
@@ -40,7 +41,6 @@ void help() {
         scans - number of scans to compute\n\
         sweeps - number of sweeps to perform\n\
         points - number of points per scan\n\
-        vnas - number of VNAs to use\n\
     For example: set start 100000000\n");
     }
     else if (strcmp(tok,"list") == 0) {
@@ -74,45 +74,105 @@ void set() {
     }
     if (strcmp(tok,"start") == 0) {
         tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            start = atol(tok);
-            printf("Start frequency set to %ld Hz\n", start);
+        if (tok == NULL) {
+            printf("ERROR: No value provided for start frequency.\n");
+            return;
         }
+        
+        long val = atol(tok);
+        
+        if (val <= 0) {
+            printf("ERROR: Start frequency must be a positive number.\n");
+            return;
+        }
+        if (val < 10000 || val > 1500000000) {
+            printf("ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
+            return;
+        }
+        if (val >= stop) {
+            printf("ERROR: Start frequency must be less than stop frequency (%ld Hz).\n", stop);
+            return;
+        }
+
+        start = val;
+        printf("Start frequency set to %ld Hz\n", start);
     }
     else if (strcmp(tok,"stop") == 0) {
         tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            stop = atol(tok);
-            printf("Stop frequency set to %ld Hz\n", stop);
+        if (tok == NULL) {
+            printf("ERROR: No value provided for stop frequency.\n");
+            return;
         }
+
+        long val = atol(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Stop frequency must be a positive number.\n");
+            return;
+        }
+        if (val < 10000 || val > 1500000000) {
+            printf("ERROR: Stop frequency must be between 10kHz and 1.5GHz.\n");
+            return;
+        }
+        if (val <= start) {
+            printf("ERROR: Stop frequency must be greater than start frequency (%ld Hz).\n", start);
+            return;
+        }
+
+        stop = val;
+        printf("Stop frequency set to %ld Hz\n", stop);
     }
     else if (strcmp(tok, "scans") == 0) {
         tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            nbr_scans = atoi(tok);
-            printf("Number of scans set to %d\n", nbr_scans);
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of scans.\n");
+            return;
         }
+        
+        int val = atoi(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Number of scans must be a positive integer.\n");
+            return;
+        }
+
+        nbr_scans = val;
+        printf("Number of scans set to %d\n", nbr_scans);
     }
     else if (strcmp(tok, "sweeps") == 0) {
         tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            sweeps = atoi(tok);
-            printf("Number of sweeps set to %d\n", sweeps);
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of sweeps.\n");
+            return;
         }
+        
+        int val = atoi(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Number of sweeps must be a positive integer.\n");
+            return;
+        }
+
+        sweeps = val;
+        printf("Number of sweeps set to %d\n", sweeps);
     }
     else if (strcmp(tok, "points") == 0) {
         tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            pps = atoi(tok);
-            printf("Points per scan set to %d\n", pps);
+        if (tok == NULL) {
+            printf("ERROR: No value provided for points per scan.\n");
+            return;
         }
-    }
-    else if (strcmp(tok, "vnas") == 0) {
-        tok = strtok(NULL, " \n");
-        if (tok != NULL) {
-            num_vnas = atoi(tok);
-            printf("Number of VNAs set to %d\n", num_vnas);
+
+        int val = atoi(tok);
+
+        if (val < 1 || val > 101) {
+            printf("ERROR: Points per scan must be between 1 and 101.\n");
+            return;
         }
+
+        pps = val;
+        printf("Points per scan set to %d\n", pps);
+
     }
     else {
         printf("Parameter not recognised. Available parameters: start, stop\n");
