@@ -7,3 +7,4 @@ VnaCommandParser
 TestVnaScanMultithreaded
 TestVnaCommandParser
 *.out
+.venv
