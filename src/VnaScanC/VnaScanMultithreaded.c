@@ -102,7 +102,7 @@ struct termios configure_serial(int serial_port) {
     // VMIN = 0, VTIME > 0: Timeout with no minimum bytes
     // Read returns when data arrives or timeout expires
     tty.c_cc[VMIN] = 0;   // Read doesn't block (return immediately with available data)
-    tty.c_cc[VTIME] = 10; // 1 second timeout (tenths of a second)
+    tty.c_cc[VTIME] = 10; // 5 second timeout (tenths of a second)
 
     // Apply settings
     if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
@@ -380,19 +380,38 @@ void* scan_consumer(void *arguments) {
 
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
+    // int last_vna_id = -1;
+    FILE *f = args->touchstone_file;
 
     while (args->bfr->complete < VNA_COUNT || (args->bfr->count != 0)) {
 
         struct datapoint_NanoVNAH *data = take_buff(args->bfr);
+        if (!data) { continue; }
 
         for (int i = 0; i < POINTS; i++) {
-            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
-                   data->vna_id, total_count,
-                   ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec) + (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   data->point[i].frequency, 
-                   data->point[i].s11.re, data->point[i].s11.im, 
-                   data->point[i].s21.re, data->point[i].s21.im);
+            double send_secs = ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + 
+                                (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0);
+            double recv_secs = ((double)(data->recieve_time.tv_sec - program_start_time.tv_sec) + 
+                                (double)(data->recieve_time.tv_usec - program_start_time.tv_usec) / 1000000.0);
+            
+            // Console output
+            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n",
+                    data->vna_id, total_count,
+                    send_secs, 
+                    recv_secs,
+                    data->point[i].frequency,
+                    data->point[i].s11.re, data->point[i].s11.im,
+                    data->point[i].s21.re, data->point[i].s21.im);
+            
+            // Touchstone line
+            // freq  S11.re S11.im  S21.re S21.im  S12.re S12.im  S22.re S22.im
+            fprintf(f, "%u %.10e %.10e %.10e %.10e %.10e %.10e %.10e %.10e\n",
+                    data->point[i].frequency,
+                    data->point[i].s11.re, data->point[i].s11.im,
+                    data->point[i].s21.re, data->point[i].s21.im,
+                    0.0, 0.0,
+                    0.0, 0.0);
+                   
             total_count++;
         }
 
@@ -423,6 +442,27 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     BoundedBuffer bounded_buffer = create_bounded_buffer(N);
 
     int error;
+
+    // Generate filename with current date and time
+    char filename[128];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(filename, sizeof(filename), "vna_scan_at_%Y-%m-%d_%H-%M-%S.s2p", tm_info);
+
+    FILE *touchstone_file = fopen(filename, "w");
+    if (!touchstone_file) {
+        fprintf(stderr, "Failed to open %s for writing\n", filename);
+        destroy_bounded_buffer(&bounded_buffer);
+        free(SERIAL_PORTS); SERIAL_PORTS = NULL;
+        free(INITIAL_PORT_SETTINGS); INITIAL_PORT_SETTINGS = NULL;
+        return;
+    }
+
+    // Touchstone header: frequency in Hz, S-parameters, real/img, 50 ohm
+    fprintf(touchstone_file, "! Touchstone file generated from multi-VNA scan\n");
+    fprintf(touchstone_file, "! One file containing all VNAS, see VNA comments below\n");
+    fprintf(touchstone_file, "# Hz S RI R 50\n");
+
     // warning: needs work done before this will work properly >1 VNA
     struct scan_producer_args arguments[num_vnas];
     pthread_t producers[num_vnas];
@@ -462,7 +502,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {&bounded_buffer};
+    struct scan_consumer_args consumer_args = {&bounded_buffer, touchstone_file};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
@@ -481,6 +521,12 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, in
 
     error = pthread_join(consumer,NULL);
     if(error != 0){printf("Error %i from join consumer:\n", errno);return;}
+
+    // finish writing Touchstone data
+    if (touchstone_file) {
+        fclose(touchstone_file);
+        touchstone_file = NULL;
+    }
 
     // finish up
     destroy_bounded_buffer(&bounded_buffer);

@@ -178,6 +178,7 @@ void* scan_producer(void *args);
 
 /**
  * A thread function to print scans from buffer
+ * Thread also creates a single Touchstone file for the output of all VNAs
  * 
  * Accesses buffer according to the producer-consumer problem
  * Takes arrays of 101 readings from buffer and prints them until scans are done
@@ -186,6 +187,7 @@ void* scan_producer(void *args);
  */
 struct scan_consumer_args {
     BoundedBuffer *bfr;
+    FILE *touchstone_file;
 };
 void* scan_consumer(void *args);
 
