@@ -612,3 +612,22 @@ int test_connection(int serial_port) {
 
     return 0;
 }
+
+// PYTHON API
+
+int fill_test_datapoint(DataPoint *point){
+    if (!point) return 1; // error: null pointer
+
+    point->vna_id = 1;
+    point->frequency = 12345678;
+    point->s11_re = 1.0f;
+    point->s11_im = 0.0f;
+    point->s21_re = 0.5f;
+    point->s21_im = -0.5f;
+    point->sweep_number = 42;
+    point->send_time = 1000.0;
+    point->receive_time = 1001.0;
+
+    return 0; // success
+}
+

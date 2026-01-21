@@ -221,4 +221,19 @@ typedef enum {
 } SweepMode;
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, const char **ports);
 
+// START OF PYTHON LIBRARY API
+typedef struct {
+    int vna_id;
+    uint32_t frequency;
+    float s11_re;
+    float s11_im;
+    float s21_re;
+    float s21_im;
+    int sweep_number;
+    double send_time;
+    double receive_time;
+} DataPoint;
+
+int fill_test_datapoint(DataPoint *point);
+
 #endif
