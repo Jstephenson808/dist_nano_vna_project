@@ -117,12 +117,12 @@ int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16
 
 /**
  * Tests connection to NanoVNA by issuing info command
- * Sends "info" command and prints the response
+ * Sends "info" command and checks answered by NanoVNA
  * 
- * @param serial_port The file descriptor of the serial port
- * @return 0 on success, 1 on error
+ * @param fd The file descriptor of the serial port
+ * @return 0 on success, 1 on error / not a VNA
  */
-int test_connection(int serial_port);
+int test_vna(int fd);
 
 /**
  * Fatal error handling. 

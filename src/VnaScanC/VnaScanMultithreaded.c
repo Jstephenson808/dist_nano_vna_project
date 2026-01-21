@@ -624,28 +624,18 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     return;
 }
 
-/**
- * Helper function. Issues info command and prints output
- * 
- * @param serial_port The file descriptor of the serial port
- * @return 0 on success, 1 on error
- */
-int test_connection(int serial_port) {
-    int numBytes;
-    char buffer[32];
-
+int test_vna(int fd) {
     const char *msg = "info\r";
-    if (write_command(serial_port, msg) < 0) {
+    if (write_command(fd, msg) < 0) {
         fprintf(stderr, "Failed to send info command\n");
         return 1;
     }
 
-    do {
-        numBytes = read(serial_port,&buffer,sizeof(char)*31);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return 1;}
-        buffer[numBytes] = '\0';
-        printf("%s", (unsigned char*)buffer);
-    } while (numBytes > 0 && !strstr(buffer,"ch>"));
-
-    return 0;
+    char buffer[293];
+    int num_bytes = read_exact(fd,(uint8_t*)buffer,292);
+    buffer[num_bytes] = '\0';
+    if (strstr(buffer,"NanoVNA-H"))
+        return 0;
+    else
+        return 1;
 }
