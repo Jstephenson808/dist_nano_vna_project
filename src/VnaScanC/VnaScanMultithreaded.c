@@ -625,14 +625,17 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
 }
 
 int test_vna(int fd) {
+    const int info_size;
+
+    tcflush(fd,TCIOFLUSH);
     const char *msg = "info\r";
     if (write_command(fd, msg) < 0) {
         fprintf(stderr, "Failed to send info command\n");
         return 1;
     }
 
-    char buffer[293];
-    int num_bytes = read_exact(fd,(uint8_t*)buffer,292);
+    char buffer[info_size+1];
+    int num_bytes = read_exact(fd,(uint8_t*)buffer,info_size);
     buffer[num_bytes] = '\0';
     if (strstr(buffer,"NanoVNA-H"))
         return 0;
