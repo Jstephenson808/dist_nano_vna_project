@@ -1,7 +1,4 @@
-#include "VnaScanMultithreaded.h"
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
+#include "VnaCommandParser.h"
 
 // Validation function to check if token is a valid integer
 int isValidInt(const char* tok) {
@@ -59,17 +56,15 @@ int isValidLong(const char* tok) {
     return 1;
 }
 
-// defaults
-long start = 50000000;
-long stop = 900000000;
-int nbr_scans = 5;
-int sweeps = 1;
-SweepMode sweep_mode = NUM_SWEEPS;
-int pps = 101;
-int num_vnas = 1;
-const char* default_port = "/dev/ttyACM0";
-const char **ports = (const char **)&default_port;
-
+// settings
+long start;
+long stop;
+int nbr_scans;
+int sweeps;
+SweepMode sweep_mode;
+int pps;
+extern int num_vnas;
+extern const char **ports;
 
 void help() {
     char* tok = strtok(NULL, " \n");
@@ -275,7 +270,158 @@ void list() {
 }
 
 
-int readCommand() {
+void set() {
+    char* tok = strtok(NULL, " \n");
+    if (tok == NULL) {
+        printf("Usage: set [parameter] [value]\n");
+        return;
+    }
+    if (strcmp(tok,"start") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for start frequency.\n");
+            return;
+        }
+        
+        if (!isValidLong(tok)) {
+            printf("ERROR: Start frequency must be a number.\n");
+            return;
+        }
+        
+        long val = atol(tok);
+        
+        if (val <= 0) {
+            printf("ERROR: Start frequency must be a positive number.\n");
+            return;
+        }
+        if (val < 10000 || val > 1500000000) {
+            printf("ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
+            return;
+        }
+        if (val >= stop) {
+            printf("ERROR: Start frequency must be less than stop frequency (%ld Hz).\n", stop);
+            return;
+        }
+
+        start = val;
+        printf("Start frequency set to %ld Hz\n", start);
+    }
+    else if (strcmp(tok,"stop") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for stop frequency.\n");
+            return;
+        }
+        
+        if (!isValidLong(tok)) {
+            printf("ERROR: Stop frequency must be a number.\n");
+            return;
+        }
+
+        long val = atol(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Stop frequency must be a positive number.\n");
+            return;
+        }
+        if (val < 10000 || val > 1500000000) {
+            printf("ERROR: Stop frequency must be between 10kHz and 1.5GHz.\n");
+            return;
+        }
+        if (val <= start) {
+            printf("ERROR: Stop frequency must be greater than start frequency (%ld Hz).\n", start);
+            return;
+        }
+
+        stop = val;
+        printf("Stop frequency set to %ld Hz\n", stop);
+    }
+    else if (strcmp(tok, "scans") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of scans.\n");
+            return;
+        }
+        
+        if (!isValidInt(tok)) {
+            printf("ERROR: Number of scans must be a valid integer.\n");
+            return;
+        }
+        
+        int val = atoi(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Number of scans must be a positive integer.\n");
+            return;
+        }
+
+        nbr_scans = val;
+        printf("Number of scans set to %d\n", nbr_scans);
+    }
+    else if (strcmp(tok, "sweeps") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of sweeps.\n");
+            return;
+        }
+        
+        if (!isValidInt(tok)) {
+            printf("ERROR: Number of sweeps must be a valid integer.\n");
+            return;
+        }
+        
+        int val = atoi(tok);
+
+        if (val <= 0) {
+            printf("ERROR: Number of sweeps must be a positive integer.\n");
+            return;
+        }
+
+        sweeps = val;
+        printf("Number of sweeps set to %d\n", sweeps);
+    }
+    else if (strcmp(tok, "points") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for points per scan.\n");
+            return;
+        }
+        
+        if (!isValidInt(tok)) {
+            printf("ERROR: Points per scan must be a valid integer.\n");
+            return;
+        }
+
+        int val = atoi(tok);
+
+        if (val < 1 || val > 101) {
+            printf("ERROR: Points per scan must be between 1 and 101.\n");
+            return;
+        }
+
+        pps = val;
+        printf("Points per scan set to %d\n", pps);
+
+    }
+    else {
+        printf("Parameter not recognised. Available parameters: start, stop\n");
+    }
+}
+
+
+void list() {
+   printf("\
+    Current settings:\n\
+        Start frequency: %ld Hz\n\
+        Stop frequency: %ld Hz\n\
+        Number of scans: %d\n\
+        Number of sweeps: %d\n\
+        Points per scan: %d\n\
+        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, num_vnas);
+}
+
+
+int read_command() {
     char buff[50];
     fgets(buff, sizeof(buff), stdin);
 
@@ -305,12 +451,25 @@ int readCommand() {
     return 0;
 }
 
+void initialise_settings() {
+    // set to defaults
+    start = 50000000;
+    stop = 900000000;
+    nbr_scans = 5;
+    sweeps = 1;
+    sweep_mode = NUM_SWEEPS;
+    pps = 101;
+
+    const char* default_port = "/dev/ttyACM0";
+    initialise_port_array(default_port);
+}
+
 #ifndef TESTSUITE
 int main() {
     int fin = 0;
     while (fin != 1) {
         printf(">>> ");
-        fin = readCommand();
+        fin = read_command();
     }
     return 0;
 }
