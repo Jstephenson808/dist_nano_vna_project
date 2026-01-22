@@ -2,6 +2,7 @@
 #define VNACOMMANDPARSER_H_
 
 #include "VnaScanMultithreaded.h"
+#include "VnaCommunication.h"
 
 #include <string.h>
 
@@ -22,6 +23,22 @@ void help();
  * Expects strtok to be set up by read_command()
  */
 void scan();
+
+/*
+ * Potentially needs moved to VnaCommunication?
+ */
+void list_vnas();
+
+/*
+ * Handles VNA connection-related commands, passing control to
+ * relevant VnaCommunication method.
+ * 
+ * Will take an input for the type of VNA command,
+ * then potentially the vna to be targeted.
+ * 
+ * Expects strtok to be set up by read_command()
+ */
+void vna_commands();
 
 /*
  * Reads a single command from stdin, sets up strtok and hands

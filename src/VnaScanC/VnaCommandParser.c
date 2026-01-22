@@ -421,6 +421,36 @@ void list() {
 }
 
 
+void list_vnas() {
+    for (int i = 0; i < num_vnas; i++) {
+        printf("    %d. %s\n", i+1, ports[i]);
+    }
+    char** paths;
+    int new = find_vnas(paths);
+    if (new > 0) {
+        printf("Other serial devices detected:\n");
+        for (int i = 0; i < new; i++) {
+            printf("    %s\n", paths[i]);
+        }
+    }
+    else {
+        printf("No other serial devices detected\n");
+    }
+}
+
+void vna_commands() {
+    char* tok = strtok(NULL, " \n");
+    if (strcmp(tok,"add") == 0) {
+        add_vna(strtok(NULL, " \n"));
+    }
+    else if (strcmp(tok,"list") == 0) {
+        list_vnas();
+    }
+    else {
+        printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
+    }
+}
+
 int read_command() {
     char buff[50];
     fgets(buff, sizeof(buff), stdin);
@@ -444,6 +474,9 @@ int read_command() {
     }
     else if (strcmp(tok, "list") == 0) {
         list();
+    }
+    else if (strcmp(tok,"vna") == 0) {
+        vna_commands();
     }
     else {
         printf("Command not recognised. Type 'help' for list of available commands.\n");
