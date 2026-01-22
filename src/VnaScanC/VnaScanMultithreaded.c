@@ -625,7 +625,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
 }
 
 int test_vna(int fd) {
-    const int info_size;
+    const int info_size = 292;
 
     tcflush(fd,TCIOFLUSH);
     const char *msg = "info\r";

@@ -21,6 +21,7 @@ PARSER_NAME = VnaCommandParser
 PARSER_LINK = -lpthread -lm
 PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
 PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c ${PARSER_NAME}.c ${MULTI_NAME}.c
+
 all: scan scan-multithreaded scan-multithreaded-test scan-parser scan-parser-test
 
 scan:
