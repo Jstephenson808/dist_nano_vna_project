@@ -425,12 +425,12 @@ void list_vnas() {
     for (int i = 0; i < num_vnas; i++) {
         printf("    %d. %s\n", i+1, ports[i]);
     }
-    char** paths = NULL;
-    int new = find_vnas(paths);
+    char** new_paths = NULL;
+    int new = find_vnas(new_paths);
     if (new > 0) {
         printf("Other serial devices detected:\n");
         for (int i = 0; i < new; i++) {
-            printf("    %s\n", paths[i]);
+            printf("    %s\n", new_paths[i]);
             // free memory depending on find_vnas implementation
         }
     }
