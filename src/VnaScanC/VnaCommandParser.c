@@ -449,16 +449,16 @@ void vna_commands() {
         }
         switch(err) {
         case 1:
-            printf("Maximum number of VNAs already connected.\n");
+            fprintf(stderr, "Maximum number of VNAs already connected.\n");
             break;
         case 2:
-            printf("Port address too long, must be under %d characters\n",MAXIMUM_VNA_PATH_LENGTH);
+            fprintf(stderr, "Port address too long, must be under %d characters\n",MAXIMUM_VNA_PATH_LENGTH);
             break;
         case 3:
-            printf("VNA is already connected\n");
+            fprintf(stderr, "VNA is already connected\n");
             break;
         case 4:
-            printf("Serial device is not a NanoVNA-H\n");
+            fprintf(stderr, "Serial device is not a NanoVNA-H\n");
             break;
         }
     }
