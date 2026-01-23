@@ -5,6 +5,7 @@
 #include "VnaCommunication.h"
 
 #include <string.h>
+#include <stdio.h>
 
 // maybe make a struct for the commands I'm passing around?
 
