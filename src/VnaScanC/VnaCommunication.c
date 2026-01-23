@@ -175,3 +175,93 @@ int test_vna(int fd) {
     else
         return EXIT_FAILURE;
 }
+
+int in_vna_list(const char* vna_path) {
+    for (int i = 0; i < num_vnas; i++) {
+        if (strcmp(vna_path,ports[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+int add_vna(char* vna_path) {
+
+    if (num_vnas >= MAXIMUM_VNA_PORTS) {
+        printf("maximum number of VNAs already connected");
+        return EXIT_FAILURE;
+    }
+
+    int path_len = strlen(vna_path);
+    if (path_len > 15) {
+        // error
+    }
+
+    if (in_vna_list(vna_path)) {
+        printf("%s is already connected\n", vna_path);
+        return EXIT_FAILURE;
+    }
+    int fd = open_serial(vna_path);
+    if (fd < 0) {
+        printf("failed to open port %s\n", vna_path);
+        return EXIT_FAILURE;
+    }
+    struct termios initial_tty;
+    if (configure_serial(fd, &initial_tty) != EXIT_SUCCESS) {
+        printf("failed to configure serial settings\n");
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    if (test_vna(fd) != EXIT_SUCCESS) {
+        printf("port is not a NanoVNA-H\n");
+        restore_serial(fd,&initial_tty);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    
+    ports[num_vnas] = malloc(sizeof(char)*path_len);
+    if (!ports[num_vnas]) {
+        // error
+    }
+    strncpy(ports[num_vnas],vna_path,path_len);
+    // check success
+    num_vnas++;
+
+    restore_serial(fd,&initial_tty);
+    close(fd);
+
+    return EXIT_SUCCESS;
+}
+
+int find_vnas(char** paths) {
+    return 0;
+}
+
+int initialise_port_array(const char* init_port) {
+
+    if (ports) {
+        // close and free all ports?
+        // or move this to another function
+    }
+
+    ports = malloc(sizeof(char*)*MAXIMUM_VNA_PORTS);
+    if (!ports) {
+        // do an error thing
+    }
+    num_vnas = 0;
+
+    if (init_port != NULL) {
+        int port_len = strlen(init_port);
+
+        ports[0] = malloc(sizeof(char)*port_len);
+        if (!ports[0]) {
+            // do an error thing
+        }
+
+        strncpy(ports[0],init_port,port_len);
+        // check succeeded
+
+        num_vnas = 1;
+    }
+
+    return 0;
+}

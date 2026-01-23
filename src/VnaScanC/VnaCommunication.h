@@ -73,4 +73,27 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
  */
 int test_vna(int fd);
 
+/*
+ * Checks if a VNA is already in the connections list
+ *
+ * @param vna_path a string representing the path to the VNA's serial port
+ * @return 1 if in list, 0 if not in list
+ */
+int in_vna_list(const char* vna_path);
+
+/*
+ *
+ */
+int add_vna(char* vna_path);
+
+/*
+ * Finds new VNAs and puts them in paths list
+ */
+int find_vnas(char** paths);
+
+/*
+ *
+ */
+int initialise_port_array(const char* init_port);
+
 #endif
