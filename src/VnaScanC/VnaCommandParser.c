@@ -441,6 +441,10 @@ void list_vnas() {
 
 void vna_commands() {
     char* tok = strtok(NULL, " \n");
+    if (tok == NULL) {
+        printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
+        return;
+    }
     if (strcmp(tok,"add") == 0) {
         int err = add_vna(strtok(NULL, " \n"));
         if (err < 0) {

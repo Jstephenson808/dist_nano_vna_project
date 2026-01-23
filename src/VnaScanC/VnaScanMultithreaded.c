@@ -340,6 +340,11 @@ void* scan_consumer(void *arguments) {
 }
 
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports){
+    if (ports == NULL) {
+        fprintf(stderr, "No ports passed\n");
+        return;
+    }
+
     // Reset VNA_COUNT for clean state on subsequent runs
     VNA_COUNT_GLOBAL = 0;
 
