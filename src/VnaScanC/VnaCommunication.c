@@ -147,49 +147,43 @@ int in_vna_list(const char* vna_path) {
 
 int add_vna(char* vna_path) {
 
-    if (num_vnas >= MAXIMUM_VNA_PORTS) {
-        printf("maximum number of VNAs already connected");
-        return EXIT_FAILURE;
-    }
+    if (num_vnas >= MAXIMUM_VNA_PORTS)
+        return 1;
 
     int path_len = strlen(vna_path);
-    if (path_len > 15) {
-        // error
-    }
+    if (path_len > MAXIMUM_VNA_PATH_LENGTH)
+        return 2;
 
-    if (in_vna_list(vna_path)) {
-        printf("%s is already connected\n", vna_path);
-        return EXIT_FAILURE;
-    }
+    if (in_vna_list(vna_path))
+        return 3;
+    
     int fd = open_serial(vna_path);
-    if (fd < 0) {
-        printf("failed to open port %s\n", vna_path);
-        return EXIT_FAILURE;
-    }
+    if (fd < 0)
+        return -1;
+    
     struct termios initial_tty;
     if (configure_serial(fd, &initial_tty) != EXIT_SUCCESS) {
-        printf("failed to configure serial settings\n");
         close(fd);
-        return EXIT_FAILURE;
+        return -1;
     }
+
     if (test_vna(fd) != EXIT_SUCCESS) {
-        printf("port is not a NanoVNA-H\n");
         restore_serial(fd,&initial_tty);
         close(fd);
-        return EXIT_FAILURE;
+        return 4;
     }
     
     ports[num_vnas] = malloc(sizeof(char)*path_len);
     if (!ports[num_vnas]) {
-        // error
+        restore_serial(fd,&initial_tty);
+        close(fd);
+        return 5;
     }
     strncpy(ports[num_vnas],vna_path,path_len);
-    // check success
     num_vnas++;
 
     restore_serial(fd,&initial_tty);
     close(fd);
-
     return EXIT_SUCCESS;
 }
 

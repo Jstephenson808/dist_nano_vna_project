@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #define MAXIMUM_VNA_PORTS 10
+#define MAXIMUM_VNA_PATH_LENGTH 25
 
 /**
  * Opens a serial port
@@ -73,7 +74,7 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
  */
 int test_vna(int fd);
 
-/*
+/**
  * Checks if a VNA is already in the connections list
  *
  * @param vna_path a string representing the path to the VNA's serial port
@@ -81,17 +82,23 @@ int test_vna(int fd);
  */
 int in_vna_list(const char* vna_path);
 
-/*
- *
+/**
+ * Adds a path to a file representing a VNA connection to ports
+ * 
+ * Checks that path is a valid length, there is space in ports,
+ * can be connected to, and represents a NanoVNA-H connection.
+ * 
+ * @param vna_path a string pointing to the NanoVNA connection file
+ * @return 0 if successful, -1 if library error, 1-5 for invalid strings of different types.
  */
 int add_vna(char* vna_path);
 
-/*
+/**
  * Finds new VNAs and puts them in paths list
  */
 int find_vnas(char** paths);
 
-/*
+/**
  *
  */
 int initialise_port_array(const char* init_port);
