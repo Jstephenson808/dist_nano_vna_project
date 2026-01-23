@@ -14,7 +14,7 @@ build_scanner:
   script:
     - cd src/VnaScanC
     - make clean
-    - make scan-multithreaded CC=gcc 
+    - make VnaScanMultithreaded CC=gcc 
   artifacts:
     paths:
       - src/VnaScanC/VnaScanMultithreaded
@@ -25,7 +25,7 @@ build_scanner_tests:
   image: gcc:latest
   script:
     - cd src/VnaScanC
-    - make scan-multithreaded-test CC=gcc  
+    - make TestVnaScanMultithreaded CC=gcc  
   artifacts:
     paths:
       - test/TestVnaScanC/TestVnaScanMultithreaded
@@ -37,7 +37,7 @@ build_parser:
   script:
     - cd src/VnaScanC
     - make clean
-    - make scan-parser CC=gcc 
+    - make VnaCommandParser CC=gcc
   artifacts:
     paths:
       - src/VnaScanC/VnaCommandParser
@@ -48,7 +48,7 @@ build_parser_tests:
   image: gcc:latest
   script:
     - cd src/VnaScanC
-    - make scan-parser-test CC=gcc  
+    - make TestVnaCommandParser CC=gcc  
   artifacts:
     paths:
       - test/TestVnaScanC/TestVnaCommandParser
