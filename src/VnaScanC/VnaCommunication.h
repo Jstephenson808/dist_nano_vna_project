@@ -89,7 +89,7 @@ int in_vna_list(const char* vna_path);
  * can be connected to, and represents a NanoVNA-H connection.
  * 
  * @param vna_path a string pointing to the NanoVNA connection file
- * @return 0 if successful, -1 if library error, 1-5 for invalid strings of different types.
+ * @return 0 if successful, -1 if system error, 1-4 for invalid strings of different types.
  */
 int add_vna(char* vna_path);
 

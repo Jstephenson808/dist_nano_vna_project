@@ -460,9 +460,6 @@ void vna_commands() {
         case 4:
             printf("Serial device is not a NanoVNA-H\n");
             break;
-        case 5:
-            printf("Could not assign memory for VNA");
-            break;
         }
     }
     else if (strcmp(tok,"list") == 0) {

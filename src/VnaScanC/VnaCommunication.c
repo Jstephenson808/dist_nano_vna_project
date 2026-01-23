@@ -177,7 +177,7 @@ int add_vna(char* vna_path) {
     if (!ports[num_vnas]) {
         restore_serial(fd,&initial_tty);
         close(fd);
-        return 5;
+        return -1;
     }
     strncpy(ports[num_vnas],vna_path,path_len);
     num_vnas++;
