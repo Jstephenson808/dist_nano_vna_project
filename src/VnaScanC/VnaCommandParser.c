@@ -128,23 +128,21 @@ void set() {
     if (strcmp(tok,"start") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
-            printf("ERROR: No value provided for start frequency.\n");
+            fprintf(stderr,"ERROR: No value provided for start frequency.\n");
             return;
         }
-        
         if (!isValidLong(tok)) {
-            printf("ERROR: Start frequency must be a number.\n");
+            fprintf(stderr,"ERROR: Start frequency must be a number.\n");
             return;
         }
         
         long val = atol(tok);
-        
         if (val <= 0) {
-            printf("ERROR: Start frequency must be a positive number.\n");
+            fprintf(stderr,"ERROR: Start frequency must be a positive number.\n");
             return;
         }
         if (val < 10000 || val > 1500000000) {
-            printf("ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
+            fprintf(stderr,"ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
             return;
         }
         if (val >= stop) {
@@ -153,7 +151,6 @@ void set() {
         }
 
         start = val;
-        printf("Start frequency set to %ld Hz\n", start);
     }
     else if (strcmp(tok,"stop") == 0) {
         tok = strtok(NULL, " \n");
@@ -161,14 +158,12 @@ void set() {
             printf("ERROR: No value provided for stop frequency.\n");
             return;
         }
-        
         if (!isValidLong(tok)) {
             printf("ERROR: Stop frequency must be a number.\n");
             return;
         }
 
         long val = atol(tok);
-
         if (val <= 0) {
             printf("ERROR: Stop frequency must be a positive number.\n");
             return;
@@ -183,7 +178,6 @@ void set() {
         }
 
         stop = val;
-        printf("Stop frequency set to %ld Hz\n", stop);
     }
     else if (strcmp(tok, "scans") == 0) {
         tok = strtok(NULL, " \n");
@@ -191,21 +185,18 @@ void set() {
             printf("ERROR: No value provided for number of scans.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Number of scans must be a valid integer.\n");
             return;
         }
         
         int val = atoi(tok);
-
         if (val <= 0) {
             printf("ERROR: Number of scans must be a positive integer.\n");
             return;
         }
 
         nbr_scans = val;
-        printf("Number of scans set to %d\n", nbr_scans);
     }
     else if (strcmp(tok, "sweeps") == 0) {
         tok = strtok(NULL, " \n");
@@ -213,21 +204,18 @@ void set() {
             printf("ERROR: No value provided for number of sweeps.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Number of sweeps must be a valid integer.\n");
             return;
         }
         
         int val = atoi(tok);
-
         if (val <= 0) {
             printf("ERROR: Number of sweeps must be a positive integer.\n");
             return;
         }
 
         sweeps = val;
-        printf("Number of sweeps set to %d\n", sweeps);
     }
     else if (strcmp(tok, "points") == 0) {
         tok = strtok(NULL, " \n");
@@ -235,25 +223,21 @@ void set() {
             printf("ERROR: No value provided for points per scan.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Points per scan must be a valid integer.\n");
             return;
         }
 
         int val = atoi(tok);
-
         if (val < 1 || val > 101) {
             printf("ERROR: Points per scan must be between 1 and 101.\n");
             return;
         }
 
         pps = val;
-        printf("Points per scan set to %d\n", pps);
-
     }
     else {
-        printf("Parameter not recognised. Available parameters: start, stop\n");
+        printf("Parameter not recognised. Available parameters: start, stop, scans, sweeps, points\n");
     }
 }
 
