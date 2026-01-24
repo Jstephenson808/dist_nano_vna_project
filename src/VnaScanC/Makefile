@@ -48,10 +48,13 @@ TestVnaCommandParser:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${PARSER_TEST_SRC_FILES} -o ${PARSER_TEST_NAME} -DTESTSUITE ${PARSER_LINK}
 	- ./${PARSER_TEST_NAME}
 
-DebugVnaScanMultithreaded:
+DebugTestVnaScanMultithreaded:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} -g ${MULTI_LINK}
 
 DebugVnaCommandParser:
+	$(CC) $(CFLAGS) $(PARSER_SRC_FILES) -o ${PARSER_NAME} -g ${PARSER_LINK}
+
+DebugTestVnaCommandParser:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${PARSER_TEST_SRC_FILES} -o ${PARSER_TEST_NAME} -DTESTSUITE -g ${PARSER_LINK}
 
 clean:
