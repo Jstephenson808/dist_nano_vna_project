@@ -346,7 +346,6 @@ int read_command() {
 }
 
 void initialise_settings() {
-    // set to defaults
     start = 50000000;
     stop = 900000000;
     nbr_scans = 5;
