@@ -446,7 +446,12 @@ void vna_commands() {
         return;
     }
     if (strcmp(tok,"add") == 0) {
-        int err = add_vna(strtok(NULL, " \n"));
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            fprintf(stderr, "please provide an address\n");
+            return;
+        }
+        int err = add_vna(tok);
         if (err < 0) {
             fprintf(stderr, "Error %i: %s\n", errno, strerror(errno));
             return;
@@ -516,12 +521,13 @@ void initialise_settings() {
     sweep_mode = NUM_SWEEPS;
     pps = 101;
 
-    const char* default_port = "/dev/ttyACM0";
-    initialise_port_array(default_port);
+    //const char* default_port = "/dev/ttyACM0";
+    initialise_port_array(NULL);
 }
 
 #ifndef TESTSUITE
 int main() {
+    initialise_settings();
     int fin = 0;
     while (fin != 1) {
         printf(">>> ");
