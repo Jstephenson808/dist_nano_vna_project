@@ -146,7 +146,6 @@ int in_vna_list(const char* vna_path) {
 }
 
 int add_vna(char* vna_path) {
-
     if (num_vnas >= MAXIMUM_VNA_PORTS)
         return 1;
 
@@ -218,31 +217,30 @@ int find_vnas(char** paths) {
 }
 
 int initialise_port_array(const char* init_port) {
-
     if (ports) {
-        // close and free all ports?
-        // or move this to another function
+        fprintf(stderr,"port array already initialised, skipping");
+        return EXIT_SUCCESS;
     }
 
-    ports = malloc(sizeof(char*)*MAXIMUM_VNA_PORTS);
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     if (!ports) {
-        // do an error thing
+        fprintf(stderr,"failed to allocate memory for port array");
+        return EXIT_FAILURE;
     }
     num_vnas = 0;
 
     if (init_port != NULL) {
-        int port_len = strlen(init_port);
-
-        ports[0] = malloc(sizeof(char)*port_len);
+        ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
         if (!ports[0]) {
-            // do an error thing
+            fprintf(stderr,"failed to allocate memory for VNA port");
+            return EXIT_FAILURE;
         }
 
+        int port_len = strlen(init_port);
         strncpy(ports[0],init_port,port_len);
-        // check succeeded
 
         num_vnas = 1;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
