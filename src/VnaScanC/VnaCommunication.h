@@ -98,7 +98,7 @@ int add_vna(char* vna_path);
 /**
  * Finds new VNAs and puts them in paths list
  */
-int find_vnas(char** paths);
+int find_vnas(char** paths, const char* search_dir);
 
 /**
  *

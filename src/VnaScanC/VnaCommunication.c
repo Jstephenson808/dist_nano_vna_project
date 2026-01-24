@@ -186,10 +186,10 @@ int add_vna(char* vna_path) {
     return EXIT_SUCCESS;
 }
 
-int find_vnas(char** paths) {
+int find_vnas(char** paths, const char* search_dir) {
     DIR *d;
     struct dirent *dir;
-    d = opendir("/dev");
+    d = opendir(search_dir);
     if (d) {
         int count = 0;
         while ((dir = readdir(d)) != NULL) {
