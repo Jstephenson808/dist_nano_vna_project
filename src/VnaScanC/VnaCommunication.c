@@ -173,7 +173,7 @@ int add_vna(char* vna_path) {
         return 4;
     }
     
-    ports[num_vnas] = malloc(sizeof(char)*path_len);
+    ports[num_vnas] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     if (!ports[num_vnas]) {
         restore_serial(fd,&initial_tty);
         close(fd);
@@ -192,20 +192,29 @@ int find_vnas(char** paths) {
     struct dirent *dir;
     d = opendir("/dev");
     if (d) {
+        int count = 0;
         while ((dir = readdir(d)) != NULL) {
             if (strstr(dir->d_name,"ttyACM")) {
                 char vna_name[MAXIMUM_VNA_PATH_LENGTH];
                 strncpy(vna_name,"/dev/",6);
                 strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-6);
 
-                if (!in_vna_list(vna_name)) {
-                    printf("%s\n",vna_name);
+                if (!in_vna_list(vna_name) && count < MAXIMUM_VNA_PORTS) {
+                    paths[count] = NULL;
+                    paths[count] = malloc(sizeof(char) * MAXIMUM_VNA_PATH_LENGTH);
+                    if (paths[count] == NULL) {
+                        fprintf(stderr,"failed to allocate memory");
+                        return -1;
+                    }
+                    strncpy(paths[count],vna_name,MAXIMUM_VNA_PATH_LENGTH);
+                    count++;
                 }
             }
         }
         closedir(d);
+        return count;
     }
-    return 0;
+    return -1;
 }
 
 int initialise_port_array(const char* init_port) {
