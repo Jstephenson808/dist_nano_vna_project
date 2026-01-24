@@ -6,11 +6,13 @@
 #include <string.h>
 #include <termios.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 #include <fcntl.h>
 #include <errno.h>
 #include <termios.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #define MAXIMUM_VNA_PORTS 10
 #define MAXIMUM_VNA_PATH_LENGTH 25
