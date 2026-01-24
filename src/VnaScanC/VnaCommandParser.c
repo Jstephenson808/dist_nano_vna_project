@@ -70,11 +70,13 @@ void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
         printf("\
-    scan: starts a scan with current settings\n\
     exit: safely exits the program\n\
-    help: prints a list of all available commands\n\
+    help: prints a list of all available commands,\n\
+          or user guide for specified command\n\
+    list: lists the values of the current scan parameters\n\
+    scan: starts a scan with current settings\n\
     set: sets a parameter to a new value\n\
-    list: lists the values of the current settings (can be changed using the set setting)\n"
+    vna: executes specified vna command (see 'help vna' for details)\n"
         );
     }
     else if (strcmp(tok,"scan") == 0) {
@@ -98,6 +100,45 @@ void help() {
     }
     else if (strcmp(tok,"list") == 0) {
         printf("Lists the current settings used for the scan.\n");
+    }
+    else if (strcmp(tok,"vna") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("\
+    Family of commands to manage VNA connections.\n\
+    Command options:\n\
+        vna add <port> - connects to the specified vna.\n\
+        vna list - lists connected VNAs and searches /dev directory\n\
+        for devices of the format ttyACM*\n");
+        }
+        else if (strcmp(tok,"add") == 0) {
+            printf("\
+    Attempts to connect to the specified VNA device, first checking\n\
+    that it is reachable and that it represents a NanoVNA-H device.\n\
+    Usage example:\n\
+        vna add /dev/ttyACM0\n");
+        }
+        else if (strcmp(tok,"list") == 0) {
+            printf("\
+    Lists connected VNAs and searches /dev directory for unlisted\n\
+    files of the format ttyACM*, which are then listed.\n\
+    Usage example:\n\
+        vna list\n");
+        }
+        else {
+            printf("\
+    command not recognised. vna subcommands:\n\
+        vna add\n\
+        vna list\n\
+    see 'help vna' for more.\n");
+        }
+    }
+    else if (strcmp(tok,"help") == 0) {
+        printf("\
+    prints a user guide for the specified command,\n\
+    or a list of all available commands.\n\
+    Usage example:\n\
+        help help\n");
     }
     else {
         printf("Usage: help [command]\nFor list of possible commands type 'help'.\n");
