@@ -22,11 +22,14 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ├── src/                                    # Main project directory
 │   ├── VnaScanC/                           
 │   │   ├── Makefile                        # Build configuration
+│   │   ├── VnaCommandParser.c              # Alternative driver file with CLI command parser
+│   │   ├── VnaCommandParser.h
+│   │   ├── VnaCommunication.c              # Helpful methods for interacting with VNAs
+│   │   ├── VnaCommunication.h
 │   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
 │   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
-│   │   ├── VnaScanMultithreadedMain.c      # Driver file for above
-│   │   ├── VnaCommandParser.c              # Alternative driver file with CLI command parser
-│   │   └── VnaScanMultithreaded.h          # Data structures and function declarations
+│   │   ├── VnaScanMultithreaded.h
+│   │   └── VnaScanMultithreadedMain.c      # Driver file for above
 │   └── VnaScanPython/
 │       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
@@ -34,8 +37,9 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
     ├── simulatedTests.sh                   # Bash file for runnings tests with emulator automatically
     ├── testin.txt                          # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
     └── TestVnaScanC/
+        ├── TestVnaCommandParser.c          # Unity tests for CLI command parser
+        ├── TestVnaCommunication.c          # Unity tests for VNA methods
         └── TestVnaScanMultithreaded.c      # Unity tests for multithreaded scanner
-        └── TestVnaCommandParser.c          # Unity tests for CLI command parser
 ```
 
 **Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is contained within **`VnaScanMultithreaded.c`**, **`VnaScanMultithreadedMain.c`**, and **`VnaCommandParser.c`**.
@@ -129,7 +133,7 @@ Or find details about a given command like so:
 e.g.
 ```bash
 ./VnaCommandParser
->>> help <scan>
+>>> help scan
 ```
 
 ## Testing
@@ -141,6 +145,7 @@ Our unit tests are contained within the test directory. They can be run individu
 cd test/TestVnaScanC
 ./TestVnaScanMultithreaded
 ./TestVnaCommandParser
+./TestVnaCommunication
 ```
 This will ignore some tests as there is no VNA connected. They can also be run with a VNA plugged in as so:
 ```bash
@@ -187,6 +192,8 @@ make
 - `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
 - `VnaCommandParser.c` - Driver file, repeatedly takes in user input and executes commands.
 - `VnaCommandParser.h` - Header file for above
+- `VnaCommunication.c` - Contains many useful functions for interacting with VNAs. Imported by all files dealing with VNAs directly.
+- `VnaCommunication.h` - Header file for above
 
 **Prototypes (Development History):**
 - `VnaScan.c` - Initial single-threaded C implementation

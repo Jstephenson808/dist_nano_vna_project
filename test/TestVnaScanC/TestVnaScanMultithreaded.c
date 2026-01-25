@@ -5,7 +5,7 @@
 
 int vna_mocked = 0;
 int numVNAs;
-const char **ports;
+const char **test_ports;
 
 extern int *SERIAL_PORTS;
 extern struct termios* INITIAL_PORT_SETTINGS;
@@ -30,7 +30,7 @@ void setUp(void) {
         }
 
         for (int i = 0; i < numVNAs; i++) {
-            SERIAL_PORTS[i] = open_serial(ports[i]);
+            SERIAL_PORTS[i] = open_serial(test_ports[i]);
             if (SERIAL_PORTS[i] < 0) {
                 fprintf(stderr, "Failed to open serial port for test\n");
                 close_and_reset_all();
@@ -77,25 +77,6 @@ void tearDown(void) {
 /**
  * Serial functions
  */
-void test_configure_serial_settings_correct() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
-    
-    // change port settings to something random
-    // change them back with configure_serial_settings
-    // somehow needs to test that port settings are correct
-    // restore
-}
-
-void test_restore_serial_settings_correct() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
-
-    // change port settings to something random
-    // change them back with restore_serial_settings
-    // somehow needs to test that port settings are correct
-}
-
 void test_close_and_reset_all_targets() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     
@@ -529,12 +510,10 @@ int main(int argc, char *argv[]) {
         // if not, flag to skip serial tests
         vna_mocked = 1;
         numVNAs = argc - 1;
-        ports = (const char **)&argv[1];
+        test_ports = (const char **)&argv[1];
     }
     
     // serial tests
-    RUN_TEST(test_configure_serial_settings_correct);
-    RUN_TEST(test_restore_serial_settings_correct);
     RUN_TEST(test_close_and_reset_all_targets);
     RUN_TEST(test_write_command);
     RUN_TEST(test_read_exact_reads_one_byte);
