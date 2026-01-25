@@ -4,8 +4,8 @@
 #define UNITY_INCLUDE_CONFIG_H
 
 int vna_mocked = 0;
-int numVNAs;
-const char **mock_ports;
+int num_mocked;
+char **mock_ports;
 
 int test_vna_count = 0;
 int* test_fds = NULL;
@@ -16,8 +16,8 @@ int open_test_ports() {
     test_vna_count = 0;
     
     // Initialise global variables
-    test_fds = calloc(numVNAs, sizeof(int));
-    test_initial_port_settings = calloc(numVNAs, sizeof(struct termios));
+    test_fds = calloc(num_mocked, sizeof(int));
+    test_initial_port_settings = calloc(num_mocked, sizeof(struct termios));
     
     if (!test_fds || !test_initial_port_settings) {
         fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
@@ -26,7 +26,7 @@ int open_test_ports() {
         return -1;
     }
 
-    for (int i = 0; i < numVNAs; i++) {
+    for (int i = 0; i < num_mocked; i++) {
         test_fds[i] = open_serial(mock_ports[i]);
         if (test_fds[i] < 0)
             fprintf(stderr, "Failed to open serial port for test\n");
@@ -60,6 +60,9 @@ void tearDown(void) {
     }
 }
 
+/**
+ * serial settings
+ */
 void test_configure_serial_settings_correct() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
@@ -69,7 +72,6 @@ void test_configure_serial_settings_correct() {
     // somehow needs to test that port settings are correct
     // restore
 }
-
 void test_restore_serial_settings_correct() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
@@ -79,6 +81,9 @@ void test_restore_serial_settings_correct() {
     // somehow needs to test that port settings are correct
 }
 
+/**
+ * write_command
+ */
 void test_write_command() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 
@@ -98,6 +103,9 @@ void test_write_command() {
     TEST_ASSERT_NOT_NULL(found_name);
 }
 
+/**
+ * read_exact
+ */
 void test_read_exact_reads_one_byte() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     int port = open_test_ports();
@@ -109,7 +117,6 @@ void test_read_exact_reads_one_byte() {
 
     TEST_ASSERT_EQUAL_INT(1,bytes_read);
 }
-
 void test_read_exact_reads_ten_bytes() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     int port = open_test_ports();
@@ -123,25 +130,186 @@ void test_read_exact_reads_ten_bytes() {
     TEST_ASSERT_EQUAL_INT(10,bytes_read);
 }
 
-// test_vna
+/**
+ * test_vna
+ */
+void test_test_vna_success() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    int port = open_test_ports();
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,test_vna(port));
+}
 
-// in_vna_list
+/**
+ * in_vna_list
+ */
+extern char **ports;
+extern int num_vnas;
+void test_in_vna_list_true() {
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < 3; i++) {
+        ports[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+        strncpy(ports[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
+        num_vnas++;
+    }
+    const char* actual_port = "/dev/ttyACM20";
+    strncpy(ports[1],actual_port,MAXIMUM_VNA_PATH_LENGTH);
 
-// add_vna
-//      - working
-//      - too many vnas
-//      - too long path
-//      - not a file/dir
-//      - already connected
-//      - not a NanoVNA-H
+    TEST_ASSERT_EQUAL_INT(1,in_vna_list(actual_port));
 
-// remove_vna
-//      - working
-//      - not on list
+    // restore for next
+    for (int i = 0; i < 3; i++) {
+        free(ports[i]);
+        num_vnas--;
+    }
+    free(ports);
+    ports = NULL;
+}
+void test_in_vna_list_false() {
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < 3; i++) {
+        ports[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+        strncpy(ports[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
+    }
+    const char* actual_port = "/dev/ttyACM20";
 
-// find_vnas (use fake dir and vna files)
-//      - working
-//      - edges
+    TEST_ASSERT_EQUAL_INT(0,in_vna_list(actual_port));
+
+    // restore for next
+    for (int i = 0; i < 3; i++) {
+        free(ports[i]);
+        num_vnas--;
+    }
+    free(ports);
+    ports = NULL;
+}
+void test_in_vna_list_empty() {
+    const char* actual_port = "/dev/ttyACM20";
+
+    TEST_ASSERT_EQUAL_INT(0,in_vna_list(actual_port));
+}
+
+/**
+ * add_vna
+ */
+void test_add_vna_adds() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    num_vnas = 0;
+
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, add_vna(mock_ports[0]));
+    TEST_ASSERT_EQUAL_STRING(mock_ports[0],ports[0]);
+
+    num_vnas = 0;
+    free(ports[0]);
+    free(ports);
+    ports = NULL;
+}
+void test_add_vna_fails_max_vnas() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    num_vnas = MAXIMUM_VNA_PORTS;
+
+    TEST_ASSERT_EQUAL_INT(1,add_vna(mock_ports[0]));
+
+    num_vnas = 0;
+    free(ports);
+    ports = NULL;
+}
+void test_add_vna_fails_max_path_length() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+
+    char* long_path = "12345678912345678912345678";
+    TEST_ASSERT_EQUAL_INT(2,add_vna(long_path));
+    
+    free(ports);
+    ports = NULL;
+}
+void test_add_vna_fails_not_a_file() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+
+    char* fake_file = "/not_a_real_file_name";
+    TEST_ASSERT_EQUAL_INT(-1,add_vna(fake_file));
+    
+    free(ports);
+    ports = NULL;
+}
+void test_add_vna_fails_already_connected() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+
+    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(ports[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
+    num_vnas = 1;
+
+    TEST_ASSERT_EQUAL_INT(3,add_vna(mock_ports[0]));
+    
+    num_vnas = 0;
+    free(ports);
+    ports = NULL;
+}
+void test_add_vna_fails_not_a_nanovna() {
+    TEST_IGNORE_MESSAGE("Needs new non-vna serial simulator script");
+}
+
+/**
+ * remove_vna
+ */
+void test_remove_vna_removes() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+
+    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(ports[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
+    num_vnas = 1;
+
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,remove_vna(mock_ports[0]));
+    
+    free(ports);
+    ports = NULL;
+}
+void test_remove_vna_no_such_connection() {
+    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+
+    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(ports[0],"fake_port_name",MAXIMUM_VNA_PATH_LENGTH);
+    num_vnas = 1;
+
+    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE,remove_vna(mock_ports[0]));
+    
+    free(ports[0]);
+    num_vnas = 0;
+    free(ports);
+    ports = NULL;
+}
+
+/**
+ * find_vnas
+ */
+void test_find_vnas_finds_one() {
+    const char* filename = "ttyACM0";
+
+    FILE *fptr;
+    fptr = fopen(filename, "w");
+    fclose(fptr); 
+
+    char** found = calloc(sizeof(char *),MAXIMUM_VNA_PORTS);
+    TEST_ASSERT_EQUAL_INT(1,find_vnas(found,"."));
+    TEST_ASSERT_NOT_NULL(strstr(found[0],filename));
+
+    free(found[0]);
+    free(found);
+    remove(filename);
+}
+void test_find_vnas_finds_zero() {
+    char** found = calloc(sizeof(char *),MAXIMUM_VNA_PORTS);
+    TEST_ASSERT_EQUAL_INT(0,find_vnas(found,"."));
+
+    free(found);
+}
+
 
 // initialise_port_array
 
@@ -152,15 +320,36 @@ int main(int argc, char *argv[]) {
         // args for if using python simulator or not
         // if not, flag to skip serial tests
         vna_mocked = 1;
-        numVNAs = argc - 1;
-        mock_ports = (const char **)&argv[1];
+        num_mocked = argc - 1;
+        mock_ports = (char **)&argv[1];
     }
     
     RUN_TEST(test_configure_serial_settings_correct);
     RUN_TEST(test_restore_serial_settings_correct);
+
     RUN_TEST(test_write_command);
+
     RUN_TEST(test_read_exact_reads_one_byte);
     RUN_TEST(test_read_exact_reads_ten_bytes);
+
+    RUN_TEST(test_test_vna_success);
+
+    RUN_TEST(test_in_vna_list_true);
+    RUN_TEST(test_in_vna_list_false);
+    RUN_TEST(test_in_vna_list_empty);
+
+    RUN_TEST(test_add_vna_adds);
+    RUN_TEST(test_add_vna_fails_max_vnas);
+    RUN_TEST(test_add_vna_fails_max_path_length);
+    RUN_TEST(test_add_vna_fails_not_a_file);
+    RUN_TEST(test_add_vna_fails_already_connected);
+    RUN_TEST(test_add_vna_fails_not_a_nanovna);
+
+    RUN_TEST(test_remove_vna_removes);
+    RUN_TEST(test_remove_vna_no_such_connection);
+
+    RUN_TEST(test_find_vnas_finds_one);
+    RUN_TEST(test_find_vnas_finds_zero);
 
     return UNITY_END();
 }
