@@ -186,6 +186,22 @@ int add_vna(char* vna_path) {
     return EXIT_SUCCESS;
 }
 
+int remove_vna(char* vna_path) {
+    for (int i = 0; i < num_vnas; i++) {
+        if (strcmp(vna_path,ports[i]) == 0) {
+            if (i != num_vnas-1) {
+                strncpy(ports[i],ports[num_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
+            }
+            free(ports[num_vnas-1]);
+            ports[num_vnas-1] = NULL;
+            num_vnas--;
+
+            return EXIT_SUCCESS;
+        }
+    }
+    return EXIT_FAILURE;
+}
+
 int find_vnas(char** paths, const char* search_dir) {
     DIR *d;
     struct dirent *dir;

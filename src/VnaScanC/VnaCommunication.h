@@ -96,12 +96,29 @@ int in_vna_list(const char* vna_path);
 int add_vna(char* vna_path);
 
 /**
+ * Removes a VNA path from ports
+ * 
+ * Will reorder the ports array.
+ * 
+ * @param vna_path a string pointing to the NanoVNA connection file
+ * @return 0 if successful, 1 if fails.
+ */
+int remove_vna(char* vna_path);
+
+/**
  * Finds new VNAs and puts them in paths list
+ * 
+ * @param paths a char* array of size MAXIMUM_VNA_PORTS to put found ports in
+ * @param search_dir a string representing the directory in which to search (usually "/dev")
+ * @return number of paths found (between 0 and MAXIMUM_VNA_PORTS)
  */
 int find_vnas(char** paths, const char* search_dir);
 
 /**
- *
+ * Assigns memory for and initialises port array
+ * 
+ * @param init_port path to the initial VNA, pass NULL if none.
+ * @return 0 on success, 1 on failure.
  */
 int initialise_port_array(const char* init_port);
 

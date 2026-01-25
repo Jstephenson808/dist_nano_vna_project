@@ -108,6 +108,7 @@ void help() {
     Family of commands to manage VNA connections.\n\
     Command options:\n\
         vna add <port> - connects to the specified vna.\n\
+        vna remove <port> - disconnects the specified vna.\n\
         vna list - lists connected VNAs and searches /dev directory\n\
         for devices of the format ttyACM*\n");
         }
@@ -117,6 +118,13 @@ void help() {
     that it is reachable and that it represents a NanoVNA-H device.\n\
     Usage example:\n\
         vna add /dev/ttyACM0\n");
+        }
+        else if (strcmp(tok,"remove") == 0) {
+            printf("\
+    Attempts to disconnect the specified VNA device, if it can\n\
+    be found in the open connections.\n\
+    Usage example:\n\
+        vna remove /dev/ttyACM0\n");
         }
         else if (strcmp(tok,"list") == 0) {
             printf("\
@@ -343,6 +351,17 @@ void vna_commands() {
         case 4:
             fprintf(stderr, "Serial device is not a NanoVNA-H\n");
             break;
+        }
+    }
+    else if (strcmp(tok,"remove") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            fprintf(stderr, "please provide an address\n");
+            return;
+        }
+        if (remove_vna(tok) != EXIT_SUCCESS) {
+            fprintf(stderr,"could not remove VNA %s\n",tok);
+            return;
         }
     }
     else if (strcmp(tok,"list") == 0) {
