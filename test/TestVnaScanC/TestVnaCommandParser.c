@@ -1,6 +1,8 @@
 #include "VnaCommandParser.h"
 #include "unity.h"
 #include <string.h> // used for strncpy for helper command for setter tests
+#include <stdio.h>
+
 
 #define UNITY_INCLUDE_CONFIG_H
 
@@ -21,13 +23,20 @@ extern int sweeps;
 extern int pps;
 
 // Helper function to run set command with given input string
-static void runSetCommand(const char *line) {
-    static char buf[128];
-    strncpy(buf, line, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0'; // for Null termination
+static void runSetCommand(const char *line){
+    FILE *tmp = tmpfile();
+    TEST_ASSERT_NOT_NULL_MESSAGE(tmp, "tmpfile() failed (cannot create temp stdin)");
 
-    (void)strtok(buf, " \n"); // consume "set"
-    set();
+    fputs(line, tmp);
+    rewind(tmp);
+
+    FILE *old_stdin = stdin;
+    stdin = tmp;
+
+    (void)readCommand();  // consumes the single line
+
+    stdin = old_stdin;
+    fclose(tmp);
 }
 
 void setUp(void) {
