@@ -77,25 +77,6 @@ void tearDown(void) {
 /**
  * Serial functions
  */
-void test_configure_serial_settings_correct() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
-    
-    // change port settings to something random
-    // change them back with configure_serial_settings
-    // somehow needs to test that port settings are correct
-    // restore
-}
-
-void test_restore_serial_settings_correct() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
-
-    // change port settings to something random
-    // change them back with restore_serial_settings
-    // somehow needs to test that port settings are correct
-}
-
 void test_close_and_reset_all_targets() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     
@@ -533,8 +514,6 @@ int main(int argc, char *argv[]) {
     }
     
     // serial tests
-    RUN_TEST(test_configure_serial_settings_correct);
-    RUN_TEST(test_restore_serial_settings_correct);
     RUN_TEST(test_close_and_reset_all_targets);
     RUN_TEST(test_write_command);
     RUN_TEST(test_read_exact_reads_one_byte);

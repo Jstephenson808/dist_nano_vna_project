@@ -54,6 +54,17 @@ build_parser_tests:
       - test/TestVnaScanC/TestVnaCommandParser
     expire_in: 1 hour
 
+build_comms_tests:
+  stage: build
+  image: gcc:latest
+  script:
+    - cd src/VnaScanC
+    - make TestVnaCommunication CC=gcc  
+  artifacts:
+    paths:
+      - test/TestVnaScanC/TestVnaCommunication
+    expire_in: 1 hour
+
 test:
   stage: test
   image: python:3.11
@@ -62,6 +73,7 @@ test:
     - build_scanner_tests
     - build_parser
     - build_parser_tests
+    - build_comms_tests
   interruptible: true
   timeout: 5m
   before_script:
@@ -84,9 +96,11 @@ test:
     - cd test/TestVnaScanC
     - chmod +x TestVnaScanMultithreaded
     - chmod +x TestVnaCommandParser
+    - chmod +x TestVnaCommunication
     - lsof -p $$ | wc -l
     - timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave  # Pass the two ports, use these for the tests
-    -  timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt 
+    - timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt
+    - timeout 120s  ./TestVnaCommunication /tmp/vna0_slave /tmp/vna1_slave
     - lsof -p $$ | wc -l
 
   after_script:
