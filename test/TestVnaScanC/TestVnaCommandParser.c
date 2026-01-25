@@ -24,30 +24,30 @@ void tearDown(void) {
 void testReadCommandUsesSweepsModeNoArgs() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
-    readCommand();
+    read_command();
     TEST_ASSERT_EQUAL(sweep_mode, NUM_SWEEPS);
 }
 void testReadCommandUsesSweepsModeSweepsArgs() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
-    readCommand();
+    read_command();
     TEST_ASSERT_EQUAL(sweep_mode, NUM_SWEEPS);
 }
 void testReadCommandUsesTimeModeTimeArg() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
-    readCommand();
+    read_command();
     TEST_ASSERT_EQUAL(sweep_mode, TIME);
 }
 void testHelpCommandReturnsSuccess() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
-    TEST_ASSERT_EQUAL(readCommand(), 0);
+    TEST_ASSERT_EQUAL(read_command(), 0);
 }
 void testExitCommandReturnsOne() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
-    TEST_ASSERT_EQUAL(readCommand(), 1);
+    TEST_ASSERT_EQUAL(read_command(), 1);
 }
 
 int main(int argc, char *argv[]) {

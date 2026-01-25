@@ -12,36 +12,56 @@ UNITY_SOURCE = ${UNITY_DIR}/unity.c
 INC_DIRS=-I./ -I$(UNITY_DIR)
 SYMBOLS=
 
+COMMS_NAME = VnaCommunication
+COMMS_SRC = $(COMMS_NAME).c
+COMMS_TEST_NAME = ${TEST_DIR}/Test${COMMS_NAME}
+COMMS_TEST_SRC_FILES = ${UNITY_SOURCE} ${COMMS_TEST_NAME}.c $(COMMS_SRC)
+
 MULTI_NAME = VnaScanMultithreaded
+MULTI_SRC_FILES = $(MULTI_NAME).c $(COMMS_SRC)
 MULTI_LINK = -lpthread -lm
 MULTI_TEST_NAME = ${TEST_DIR}/Test${MULTI_NAME}
-MULTI_TEST_SRC_FILES = ${UNITY_SOURCE} ${MULTI_NAME}.c ${MULTI_TEST_NAME}.c
+MULTI_TEST_SRC_FILES = ${UNITY_SOURCE} $(MULTI_SRC_FILES) ${MULTI_TEST_NAME}.c
+
+MULTI_MAIN_SRC_FILES = $(MULTI_SRC_FILES) ${MULTI_NAME}Main.c
 
 PARSER_NAME = VnaCommandParser
+PARSER_SRC_FILES = $(PARSER_NAME).c $(MULTI_SRC_FILES)
 PARSER_LINK = -lpthread -lm
 PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
-PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c ${PARSER_NAME}.c ${MULTI_NAME}.c
-all: scan scan-multithreaded scan-multithreaded-test scan-parser scan-parser-test
+PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c $(PARSER_SRC_FILES)
 
-scan:
+all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser
+
+VnaScan:
 	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
 
-scan-multithreaded:
-	$(CC) $(CFLAGS) ${MULTI_NAME}.c ${MULTI_NAME}Main.c -o ${MULTI_NAME} ${MULTI_LINK}
+VnaScanMultithreaded:
+	$(CC) $(CFLAGS) $(MULTI_MAIN_SRC_FILES) -o ${MULTI_NAME} ${MULTI_LINK}
 
-scan-parser:
-	$(CC) $(CFLAGS) ${MULTI_NAME}.c ${PARSER_NAME}.c -o ${PARSER_NAME} ${PARSER_LINK}
+VnaCommandParser:
+	$(CC) $(CFLAGS) $(PARSER_SRC_FILES) -o ${PARSER_NAME} ${PARSER_LINK}
 
-scan-multithreaded-test:
+TestVnaScanMultithreaded:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} ${MULTI_LINK}
 	- ./${MULTI_TEST_NAME}
 
-scan-parser-test:
+TestVnaCommandParser:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${PARSER_TEST_SRC_FILES} -o ${PARSER_TEST_NAME} -DTESTSUITE ${PARSER_LINK}
 	- ./${PARSER_TEST_NAME}
 
-debugging-symbols:
+TestVnaCommunication:
+	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${COMMS_TEST_SRC_FILES} -o ${COMMS_TEST_NAME} ${MULTI_LINK}
+	- ./${COMMS_TEST_NAME}
+
+DebugTestVnaScanMultithreaded:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} -g ${MULTI_LINK}
 
+DebugVnaCommandParser:
+	$(CC) $(CFLAGS) $(PARSER_SRC_FILES) -o ${PARSER_NAME} -g ${PARSER_LINK}
+
+DebugTestVnaCommandParser:
+	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${PARSER_TEST_SRC_FILES} -o ${PARSER_TEST_NAME} -DTESTSUITE -g ${PARSER_LINK}
+
 clean:
-	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME}
+	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME} $(PARSER_NAME) $(PARSER_TEST_NAME)
