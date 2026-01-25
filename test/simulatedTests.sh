@@ -19,3 +19,6 @@ timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave
 
 chmod +x TestVnaCommandParser
 timeout 120s ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt
+
+chmod +x TestVnaCommunication
+timeout 120s ./TestVnaCommunication /tmp/vna0_slave /tmp/vna1_slave 

@@ -148,7 +148,6 @@ int in_vna_list(const char* vna_path) {
 int add_vna(char* vna_path) {
     if (num_vnas >= MAXIMUM_VNA_PORTS)
         return 1;
-
     int path_len = strlen(vna_path);
     if (path_len > MAXIMUM_VNA_PATH_LENGTH)
         return 2;
@@ -159,7 +158,6 @@ int add_vna(char* vna_path) {
     int fd = open_serial(vna_path);
     if (fd < 0)
         return -1;
-    
     struct termios initial_tty;
     if (configure_serial(fd, &initial_tty) != EXIT_SUCCESS) {
         close(fd);
@@ -206,30 +204,30 @@ int find_vnas(char** paths, const char* search_dir) {
     DIR *d;
     struct dirent *dir;
     d = opendir(search_dir);
-    if (d) {
-        int count = 0;
-        while ((dir = readdir(d)) != NULL) {
-            if (strstr(dir->d_name,"ttyACM")) {
-                char vna_name[MAXIMUM_VNA_PATH_LENGTH];
-                strncpy(vna_name,"/dev/",6);
-                strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-6);
+    if (!d)
+        return -1;
 
-                if (!in_vna_list(vna_name) && count < MAXIMUM_VNA_PORTS) {
-                    paths[count] = NULL;
-                    paths[count] = malloc(sizeof(char) * MAXIMUM_VNA_PATH_LENGTH);
-                    if (paths[count] == NULL) {
-                        fprintf(stderr,"failed to allocate memory\n");
-                        return -1;
-                    }
-                    strncpy(paths[count],vna_name,MAXIMUM_VNA_PATH_LENGTH);
-                    count++;
+    int count = 0;
+    while ((dir = readdir(d)) != NULL) {
+        if (strstr(dir->d_name,"ttyACM")) {
+            char vna_name[MAXIMUM_VNA_PATH_LENGTH];
+            strncpy(vna_name,"/dev/",6);
+            strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-6);
+
+            if (!in_vna_list(vna_name) && count < MAXIMUM_VNA_PORTS) {
+                paths[count] = NULL;
+                paths[count] = malloc(sizeof(char) * MAXIMUM_VNA_PATH_LENGTH);
+                if (paths[count] == NULL) {
+                    fprintf(stderr,"failed to allocate memory\n");
+                    return -1;
                 }
+                strncpy(paths[count],vna_name,MAXIMUM_VNA_PATH_LENGTH);
+                count++;
             }
         }
-        closedir(d);
-        return count;
     }
-    return -1;
+    closedir(d);
+    return count;
 }
 
 int initialise_port_array(const char* init_port) {
