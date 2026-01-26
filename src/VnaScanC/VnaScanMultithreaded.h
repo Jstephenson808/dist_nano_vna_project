@@ -268,7 +268,6 @@ int start_async_scan(int num_vnas, int nbr_scans, int start, int stop,
 
 /**
  * Stop the currently running async scan
- * 
  * Safe to call even if no scan is running.
  * 
  * @return 0 on success, -1 if error during shutdown

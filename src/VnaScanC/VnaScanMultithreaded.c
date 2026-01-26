@@ -613,8 +613,12 @@ int test_connection(int serial_port) {
     return 0;
 }
 
+// ------------------------------------
 // PYTHON API
+// ------------------------------------
 
+
+// Test Function
 int fill_test_datapoint(DataPoint *point){
     if (!point) return 1; // error: null pointer
 
@@ -631,10 +635,7 @@ int fill_test_datapoint(DataPoint *point){
     return 0; // success
 }
 
-// ============================================================================
-// ASYNC SCANNING API - For Python Integration
-// ============================================================================
-
+// Start of actual implementation
 // Global state for async scanning
 static pthread_t async_scan_thread;
 static volatile int async_scan_active = 0;
@@ -763,7 +764,17 @@ static void* async_scan_thread_func(void *arguments) {
             goto cleanup;
         }
         VNA_COUNT_GLOBAL++;
-        
+    }
+    
+    // All ports opened successfully - now report actual success
+    if (async_status_callback) {
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "✓ Scan started successfully - %d VNA(s) connected", args->num_vnas);
+        async_status_callback(status_msg);
+    }
+    
+    // Start producer threads
+    for (int i = 0; i < args->num_vnas && async_scan_active; i++) {
         producer_args[i].vna_id = i;
         producer_args[i].serial_port = SERIAL_PORTS[i];
         producer_args[i].nbr_scans = args->nbr_scans;
@@ -889,10 +900,7 @@ int start_async_scan(int num_vnas, int nbr_scans, int start, int stop,
         return -1;
     }
     
-    if (status_cb) {
-        status_cb("Scan started");
-    }
-    
+    // Status callback will be sent after ports are actually opened
     return 0;
 }
 
