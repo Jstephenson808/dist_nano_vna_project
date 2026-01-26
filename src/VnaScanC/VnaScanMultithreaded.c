@@ -159,7 +159,10 @@ void close_and_reset_all() {
     while (VNA_COUNT_GLOBAL > 0) {
         int i = VNA_COUNT_GLOBAL-1;
         // Restore original settings before closing
-        restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]);
+        if (restore_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]) != 0 && !fatal_error_in_progress) {
+            fprintf(stderr, "Error %i restoring settings on port %d: %s\n", 
+                    errno, i, strerror(errno));
+        }
         
         // Close the serial port
         if (close(SERIAL_PORTS[i]) != 0 && !fatal_error_in_progress) {
@@ -168,61 +171,6 @@ void close_and_reset_all() {
         }
         VNA_COUNT_GLOBAL--;
     }
-}
-
-/**
- * Writes a command to the serial port with error checking
- * 
- * @param fd The file descriptor of the serial port
- * @param cmd The command string to send (should include \r terminator)
- * @return Number of bytes written on success, -1 on error
- */
-ssize_t write_command(int fd, const char *cmd) {
-    size_t cmd_len = strlen(cmd);
-    ssize_t bytes_written = write(fd, cmd, cmd_len);
-    
-    if (bytes_written < 0) {
-        fprintf(stderr, "Error writing to fd %d: %s\n", fd, strerror(errno));
-        return -1;
-    } else if (bytes_written < (ssize_t)cmd_len) {
-        fprintf(stderr, "Warning: Partial write (%zd of %zu bytes) on fd %d\n", 
-                bytes_written, cmd_len, fd);
-    }
-    
-    return bytes_written;
-}
-
-/**
- * Reads exact number of bytes from serial port
- * Handles partial reads by continuing until all bytes are received
- * 
- * @param fd The file descriptor of the serial port
- * @param buffer The buffer to read data into
- * @param length The number of bytes to read
- * @return Number of bytes read on success, -1 on error, 0 on timeout
- */
-ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
-    ssize_t bytes_read = 0;
-    
-    while (bytes_read < (ssize_t)length) {
-        ssize_t n = read(fd, buffer + bytes_read, length - bytes_read);
-        
-        if (n < 0) {
-            fprintf(stderr, "Error reading from fd %d: %s\n", fd, strerror(errno));
-            return -1;
-        } else if (n == 0) {
-            // Timeout or end of file
-            if (bytes_read > 0) {
-                fprintf(stderr, "Timeout: only read %zd of %zu bytes from fd %d\n", 
-                        bytes_read, length, fd);
-            }
-            return bytes_read;
-        }
-        
-        bytes_read += n;
-    }
-    
-    return bytes_read;
 }
 
 /**
@@ -442,6 +390,7 @@ void* scan_producer_num(void *arguments) {
     args->bfr->complete++;
     return NULL;
 }
+
 void* scan_producer_time(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
@@ -691,30 +640,4 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     INITIAL_PORT_SETTINGS = NULL;
 
     return;
-}
-
-/**
- * Helper function. Issues info command and prints output
- * 
- * @param serial_port The file descriptor of the serial port
- * @return 0 on success, 1 on error
- */
-int test_connection(int serial_port) {
-    int numBytes;
-    char buffer[32];
-
-    const char *msg = "info\r";
-    if (write_command(serial_port, msg) < 0) {
-        fprintf(stderr, "Failed to send info command\n");
-        return 1;
-    }
-
-    do {
-        numBytes = read(serial_port,&buffer,sizeof(char)*31);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return 1;}
-        buffer[numBytes] = '\0';
-        printf("%s", (unsigned char*)buffer);
-    } while (numBytes > 0 && !strstr(buffer,"ch>"));
-
-    return 0;
 }

@@ -1,7 +1,4 @@
-#include "VnaScanMultithreaded.h"
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
+#include "VnaCommandParser.h"
 
 // Validation function to check if token is a valid integer
 int isValidInt(const char* tok) {
@@ -59,27 +56,27 @@ int isValidLong(const char* tok) {
     return 1;
 }
 
-// defaults
-long start = 50000000;
-long stop = 900000000;
-int nbr_scans = 5;
-int sweeps = 1;
-SweepMode sweep_mode = NUM_SWEEPS;
-int pps = 101;
-int num_vnas = 1;
-const char* default_port = "/dev/ttyACM0";
-const char **ports = (const char **)&default_port;
-
+// settings
+long start;
+long stop;
+int nbr_scans;
+int sweeps;
+SweepMode sweep_mode;
+int pps;
+extern int num_vnas;
+extern const char **ports;
 
 void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
         printf("\
-    scan: starts a scan with current settings\n\
     exit: safely exits the program\n\
-    help: prints a list of all available commands\n\
+    help: prints a list of all available commands,\n\
+          or user guide for specified command\n\
+    list: lists the values of the current scan parameters\n\
+    scan: starts a scan with current settings\n\
     set: sets a parameter to a new value\n\
-    list: lists the values of the current settings (can be changed using the set setting)\n"
+    vna: executes specified vna command (see 'help vna' for details)\n"
         );
     }
     else if (strcmp(tok,"scan") == 0) {
@@ -103,6 +100,53 @@ void help() {
     }
     else if (strcmp(tok,"list") == 0) {
         printf("Lists the current settings used for the scan.\n");
+    }
+    else if (strcmp(tok,"vna") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("\
+    Family of commands to manage VNA connections.\n\
+    Command options:\n\
+        vna add <port> - connects to the specified vna.\n\
+        vna remove <port> - disconnects the specified vna.\n\
+        vna list - lists connected VNAs and searches /dev directory\n\
+        for devices of the format ttyACM*\n");
+        }
+        else if (strcmp(tok,"add") == 0) {
+            printf("\
+    Attempts to connect to the specified VNA device, first checking\n\
+    that it is reachable and that it represents a NanoVNA-H device.\n\
+    Usage example:\n\
+        vna add /dev/ttyACM0\n");
+        }
+        else if (strcmp(tok,"remove") == 0) {
+            printf("\
+    Attempts to disconnect the specified VNA device, if it can\n\
+    be found in the open connections.\n\
+    Usage example:\n\
+        vna remove /dev/ttyACM0\n");
+        }
+        else if (strcmp(tok,"list") == 0) {
+            printf("\
+    Lists connected VNAs and searches /dev directory for unlisted\n\
+    files of the format ttyACM*, which are then listed.\n\
+    Usage example:\n\
+        vna list\n");
+        }
+        else {
+            printf("\
+    command not recognised. vna subcommands:\n\
+        vna add\n\
+        vna list\n\
+    see 'help vna' for more.\n");
+        }
+    }
+    else if (strcmp(tok,"help") == 0) {
+        printf("\
+    prints a user guide for the specified command,\n\
+    or a list of all available commands.\n\
+    Usage example:\n\
+        help help\n");
     }
     else {
         printf("Usage: help [command]\nFor list of possible commands type 'help'.\n");
@@ -135,23 +179,21 @@ void set() {
     if (strcmp(tok,"start") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
-            printf("ERROR: No value provided for start frequency.\n");
+            fprintf(stderr,"ERROR: No value provided for start frequency.\n");
             return;
         }
-        
         if (!isValidLong(tok)) {
-            printf("ERROR: Start frequency must be a number.\n");
+            fprintf(stderr,"ERROR: Start frequency must be a number.\n");
             return;
         }
         
         long val = atol(tok);
-        
         if (val <= 0) {
-            printf("ERROR: Start frequency must be a positive number.\n");
+            fprintf(stderr,"ERROR: Start frequency must be a positive number.\n");
             return;
         }
         if (val < 10000 || val > 1500000000) {
-            printf("ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
+            fprintf(stderr,"ERROR: Start frequency must be between 10kHz and 1.5GHz.\n");
             return;
         }
         if (val >= stop) {
@@ -160,7 +202,6 @@ void set() {
         }
 
         start = val;
-        printf("Start frequency set to %ld Hz\n", start);
     }
     else if (strcmp(tok,"stop") == 0) {
         tok = strtok(NULL, " \n");
@@ -168,14 +209,12 @@ void set() {
             printf("ERROR: No value provided for stop frequency.\n");
             return;
         }
-        
         if (!isValidLong(tok)) {
             printf("ERROR: Stop frequency must be a number.\n");
             return;
         }
 
         long val = atol(tok);
-
         if (val <= 0) {
             printf("ERROR: Stop frequency must be a positive number.\n");
             return;
@@ -190,7 +229,6 @@ void set() {
         }
 
         stop = val;
-        printf("Stop frequency set to %ld Hz\n", stop);
     }
     else if (strcmp(tok, "scans") == 0) {
         tok = strtok(NULL, " \n");
@@ -198,21 +236,18 @@ void set() {
             printf("ERROR: No value provided for number of scans.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Number of scans must be a valid integer.\n");
             return;
         }
         
         int val = atoi(tok);
-
         if (val <= 0) {
             printf("ERROR: Number of scans must be a positive integer.\n");
             return;
         }
 
         nbr_scans = val;
-        printf("Number of scans set to %d\n", nbr_scans);
     }
     else if (strcmp(tok, "sweeps") == 0) {
         tok = strtok(NULL, " \n");
@@ -220,21 +255,18 @@ void set() {
             printf("ERROR: No value provided for number of sweeps.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Number of sweeps must be a valid integer.\n");
             return;
         }
         
         int val = atoi(tok);
-
         if (val <= 0) {
             printf("ERROR: Number of sweeps must be a positive integer.\n");
             return;
         }
 
         sweeps = val;
-        printf("Number of sweeps set to %d\n", sweeps);
     }
     else if (strcmp(tok, "points") == 0) {
         tok = strtok(NULL, " \n");
@@ -242,28 +274,23 @@ void set() {
             printf("ERROR: No value provided for points per scan.\n");
             return;
         }
-        
         if (!isValidInt(tok)) {
             printf("ERROR: Points per scan must be a valid integer.\n");
             return;
         }
 
         int val = atoi(tok);
-
         if (val < 1 || val > 101) {
             printf("ERROR: Points per scan must be between 1 and 101.\n");
             return;
         }
 
         pps = val;
-        printf("Points per scan set to %d\n", pps);
-
     }
     else {
-        printf("Parameter not recognised. Available parameters: start, stop\n");
+        printf("Parameter not recognised. Available parameters: start, stop, scans, sweeps, points\n");
     }
 }
-
 
 void list() {
    printf("\
@@ -277,7 +304,77 @@ void list() {
 }
 
 
-int readCommand() {
+void list_vnas() {
+    for (int i = 0; i < num_vnas; i++) {
+        printf("    %d. %s\n", i+1, ports[i]);
+    }
+    char* new_paths[MAXIMUM_VNA_PORTS];
+    int new = find_vnas(new_paths,"/dev");
+    if (new > 0) {
+        printf("Other serial devices detected:\n");
+        for (int i = 0; i < new; i++) {
+            printf("    %s\n", new_paths[i]);
+            free(new_paths[i]);
+            new_paths[i] = NULL;
+        }
+    }
+    else {
+        printf("No other serial devices detected\n");
+    }
+}
+
+void vna_commands() {
+    char* tok = strtok(NULL, " \n");
+    if (tok == NULL) {
+        printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
+        return;
+    }
+    if (strcmp(tok,"add") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            fprintf(stderr, "please provide an address\n");
+            return;
+        }
+        int err = add_vna(tok);
+        if (err < 0) {
+            fprintf(stderr, "Error %i: %s\n", errno, strerror(errno));
+            return;
+        }
+        switch(err) {
+        case 1:
+            fprintf(stderr, "Maximum number of VNAs already connected.\n");
+            break;
+        case 2:
+            fprintf(stderr, "Port address too long, must be under %d characters\n",MAXIMUM_VNA_PATH_LENGTH);
+            break;
+        case 3:
+            fprintf(stderr, "VNA is already connected\n");
+            break;
+        case 4:
+            fprintf(stderr, "Serial device is not a NanoVNA-H\n");
+            break;
+        }
+    }
+    else if (strcmp(tok,"remove") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            fprintf(stderr, "please provide an address\n");
+            return;
+        }
+        if (remove_vna(tok) != EXIT_SUCCESS) {
+            fprintf(stderr,"could not remove VNA %s\n",tok);
+            return;
+        }
+    }
+    else if (strcmp(tok,"list") == 0) {
+        list_vnas();
+    }
+    else {
+        printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
+    }
+}
+
+int read_command() {
     char buff[50];
     fgets(buff, sizeof(buff), stdin);
 
@@ -301,18 +398,34 @@ int readCommand() {
     else if (strcmp(tok, "list") == 0) {
         list();
     }
+    else if (strcmp(tok,"vna") == 0) {
+        vna_commands();
+    }
     else {
         printf("Command not recognised. Type 'help' for list of available commands.\n");
     }
     return 0;
 }
 
+void initialise_settings() {
+    start = 50000000;
+    stop = 900000000;
+    nbr_scans = 5;
+    sweeps = 1;
+    sweep_mode = NUM_SWEEPS;
+    pps = 101;
+
+    //const char* default_port = "/dev/ttyACM0";
+    initialise_port_array(NULL);
+}
+
 #ifndef TESTSUITE
 int main() {
+    initialise_settings();
     int fin = 0;
     while (fin != 1) {
         printf(">>> ");
-        fin = readCommand();
+        fin = read_command();
     }
     return 0;
 }

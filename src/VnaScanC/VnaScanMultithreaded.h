@@ -4,6 +4,8 @@
 // needed for CRTSCTS macro
 #define _DEFAULT_SOURCE
 
+#include "VnaCommunication.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,55 +57,6 @@ struct datapoint_nanoVNA_H {
 void close_and_reset_all();
 
 /**
- * Restores serial port to original settings
- * 
- * @param fd The file descriptor of the serial port
- * @param settings The original termios settings to restore
- */
-void restore_serial(int fd, const struct termios *settings);
-
-/**
- * Opens a serial port
- * 
- * @param port The device path (e.g., "/dev/ttyACM0")
- * @return File descriptor on success, -1 on failure
- */
-int open_serial(const char *port);
-
-/**
- * Initialise port settings
- * 
- * Edits port settings to interact with a serial interface.
- * Sets up 115200 baud, 8N1, raw mode, no flow control, with timeout.
- * Flags should only be edited with bitwise operations.
- * Writes are permanent: initial settings are kept to restore on program close.
- * 
- * @param serial_port File descriptor of an already opened serial port
- * @return Original termios settings to restore later
- */
-int configure_serial(int serial_port, struct termios *initial_tty);
-
-/**
- * Writes a command to the serial port with error checking
- * 
- * @param fd The file descriptor of the serial port
- * @param cmd The command string to send (should include \r terminator)
- * @return Number of bytes written on success, -1 on error
- */
-ssize_t write_command(int fd, const char *cmd);
-
-/**
- * Reads exact number of bytes from serial port
- * Handles partial reads by continuing until all bytes are received
- * 
- * @param fd The file descriptor of the serial port
- * @param buffer The buffer to read data into
- * @param length The number of bytes to read
- * @return Number of bytes read on success, -1 on error, 0 on timeout
- */
-ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
-
-/**
  * Finds the binary header in the serial stream
  * Scans byte-by-byte looking for the header pattern (mask + points)
  * 
@@ -114,15 +67,6 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
  * @return EXIT_SUCCESS if header found, EXIT_FAILURE if timeout/header not found or error
  */
 int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
-
-/**
- * Tests connection to NanoVNA by issuing info command
- * Sends "info" command and prints the response
- * 
- * @param serial_port The file descriptor of the serial port
- * @return 0 on success, 1 on error
- */
-int test_connection(int serial_port);
 
 /**
  * Fatal error handling. 
