@@ -115,6 +115,26 @@ int remove_vna(char* vna_path);
 int find_vnas(char** paths, const char* search_dir);
 
 /**
+ * 
+ */
+void vna_id();
+
+/**
+ * 
+ */
+void vna_ping();
+
+/**
+ * 
+ */
+int vna_reset(const char* vna_port);
+
+/**
+ * 
+ */
+void vna_status();
+
+/**
  * Assigns memory for and initialises port array
  * 
  * @param init_port path to the initial VNA, pass NULL if none.

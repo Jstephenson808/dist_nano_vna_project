@@ -3,6 +3,7 @@
 
 int num_vnas = 0;
 char **ports = NULL;
+int * fds = NULL;
 
 int open_serial(const char *port) {
     // 1. Trying to open what was passed (Linux/Default behaviour)
@@ -255,6 +256,34 @@ int find_vnas(char** paths, const char* search_dir) {
     return count;
 }
 
+void vna_id() {
+    char* buffer = calloc(sizeof(char),8);
+    for (int i = 0; i < num_vnas; i++) {
+        write_command(fds[i],"version\r");
+        read_exact(fds[i],(uint8_t *)buffer,7);
+        fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,ports[i],buffer);
+    }
+}
+
+void vna_ping() {
+    for (int i = 0; i < num_vnas; i++) {
+        if (test_vna(fds[i]) == 0) {
+            fprintf(stdout,"    %s says pong\n",ports[i]);
+        }
+        else {
+            fprintf(stdout,"    failed to ping %s\n",ports[i]);
+        }
+    }
+}
+
+int vna_reset(const char* vna_port) {
+    return EXIT_FAILURE;
+}
+
+void vna_status() {
+    // doesn't do anything until sweeps etc.
+}
+
 int initialise_port_array(const char* init_port) {
     if (ports) {
         fprintf(stderr,"port array already initialised, skipping\n");
@@ -262,8 +291,11 @@ int initialise_port_array(const char* init_port) {
     }
 
     ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
-    if (!ports) {
+    fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    if (!ports || !fds) {
         fprintf(stderr,"failed to allocate memory for port array\n");
+        if (ports) {free(ports);ports=NULL;}
+        if (fds) {free(fds);fds=NULL;}
         return EXIT_FAILURE;
     }
     num_vnas = 0;
