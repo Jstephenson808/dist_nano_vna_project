@@ -304,6 +304,7 @@ struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == 0) {
         if (buffer->complete >= VNA_COUNT_GLOBAL) {
+            pthread_mutex_unlock(&buffer->lock);
             return NULL;
         }
         pthread_cond_wait(&buffer->add_cond, &buffer->lock);
