@@ -384,9 +384,13 @@ void* scan_producer_num(void *arguments) {
         for (int scan = 0; scan < args->nbr_scans && async_scan_active; scan++) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
                                                         current,current + step*(POINTS-1));
-            // add to buffer
-            if (data) {add_buff(args->bfr,data);}
+            if (!data) {
+                fprintf(stderr, "pull_scan failed on sweep %d scan %d\n", sweep + 1, scan + 1);
+                args->bfr->complete++;
+                return NULL; // exit producer early to avoid spinning on bad data
+            }
 
+            add_buff(args->bfr, data);
             current += step*POINTS;
         }
     }
@@ -409,14 +413,18 @@ void* scan_producer_time(void *arguments) {
         while (total_scans > 0 && async_scan_active) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
                                                         current,current + step);
-            // add to buffer
-            if (data) {add_buff(args->bfr,data);}
+            if (!data) {
+                fprintf(stderr, "pull_scan failed in time mode (sweep %d)\n", sweep);
+                args->bfr->complete++;
+                return NULL; // exit producer early to avoid spinning on bad data
+            }
 
-            // finish loop
+            add_buff(args->bfr, data);
             total_scans--;
             current += step;
-        }       
+        }
     }
+    args->bfr->complete++;
     return NULL;
 }
 
