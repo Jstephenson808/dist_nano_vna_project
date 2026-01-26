@@ -83,6 +83,7 @@ class NanoVNAEmulator:
     def handle_info_command(self):
         """Handle 'info' command - returns device info"""
         info = (
+            "NanoVNA-H\r\n"
             "2-4GHz 4inch\r\n"
             "Board: NANOVNA_STM32_F303\r\n"
             "2019-2020 Copyright @edy555\r\n"
