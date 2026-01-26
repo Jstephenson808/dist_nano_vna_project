@@ -5,6 +5,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
 import glob
+from vnaScanAPI import VNAScanAPI, ScanParameters, SweepMode
 
 class VNAScannerGUI:
     def __init__(self):
@@ -15,11 +16,26 @@ class VNAScannerGUI:
         
         # State
         self.tooltip_window = None  # For help tooltips
+        
+        # Initialize VNA API and data storage
+        try:
+            self.vna_api = VNAScanAPI()
+            print("✓ VNA API initialized successfully")
+        except Exception as e:
+            self.vna_api = None
+            print(f"Warning: Failed to initialize VNA API: {e}")
+        
+        # Data storage for real-time plotting (thread-safe)
+        self.scan_data = []
+        self.data_lock = threading.Lock()
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
         self.setup_ui_structure()
+        
+        # Start periodic state synchronization
+        self.root.after(2000, self.sync_scan_state)
 
     def setup_ui_structure(self):
         """Setup the user interface"""
@@ -122,7 +138,8 @@ class VNAScannerGUI:
             text="Start Continuous Scan", 
             fg_color=("#16A500", "#14A007"),
             hover_color="#043100",
-            font=("Roboto", 14, "bold")
+            font=("Roboto", 14, "bold"),
+            command=self.start_scan  # LINK: Button → start_scan function
         )
         self.start_button.pack(pady=10, padx=10, fill="x")
         
@@ -132,7 +149,8 @@ class VNAScannerGUI:
             fg_color=("#AE0006", "#B80006"),
             hover_color="#4E0003",
             state="disabled",
-            font=("Roboto", 14)
+            font=("Roboto", 14),
+            command=self.stop_scan  # LINK: Button → stop_scan function
         )
         self.stop_button.pack(pady=(0, 10), padx=10, fill="x")
 
@@ -143,8 +161,8 @@ class VNAScannerGUI:
         ctk.CTkLabel(vna_frame, text="VNA Configuration", font=("Roboto", 14, "bold")).pack(pady=(10, 5))
         
         ctk.CTkLabel(vna_frame, text="Number of VNAs:").pack(anchor="w", padx=10)
-        self.num_vnas = ctk.CTkEntry(vna_frame, placeholder_text="2")
-        self.num_vnas.insert(0, "2")
+        self.num_vnas = ctk.CTkEntry(vna_frame, placeholder_text="1")  # Changed from "2" to "1"
+        self.num_vnas.insert(0, "1")  # Only one VNA available
         self.num_vnas.pack(padx=10, pady=(0, 5), fill="x")
         
         detect_btn = ctk.CTkButton(vna_frame, text="Auto-detect VNAs", command=self.detect_vnas)
@@ -152,7 +170,7 @@ class VNAScannerGUI:
         
         ctk.CTkLabel(vna_frame, text="Serial Ports (one per line):").pack(anchor="w", padx=10)
         self.ports_text = ctk.CTkTextbox(vna_frame, height=80)
-        self.ports_text.insert("1.0", "/dev/ttyACM0\n/dev/ttyACM1")
+        self.ports_text.insert("1.0", "/dev/ttyACM0")  # Only the available port
         self.ports_text.pack(padx=10, pady=(0, 10), fill="x")
         
         # Utility buttons
@@ -376,16 +394,210 @@ class VNAScannerGUI:
         """Change appearance theme"""
         ctk.set_appearance_mode(theme.lower())
 
+    # ============================================================================  
+    # VNA SCAN CONTROL FUNCTIONS - Linking GUI to C Library
+    # ============================================================================
+    
+    def start_scan(self):
+        """LINK: Start button → C library async scanning
+        
+        This function:
+        1. Reads parameters from GUI controls
+        2. Converts them to C library format 
+        3. Calls start_async_scan() with Python callbacks
+        4. Updates GUI state (disable start, enable stop)
+        """
+        if not self.vna_api:
+            self.log("ERROR: VNA API not initialized")
+            return
+        
+        try:
+            # STEP 1: Read parameters from GUI controls
+            start_freq = int(self.start_freq.get())
+            stop_freq = int(self.stop_freq.get())
+            multiplier = self.slider_to_multiplier(self.num_scans_slider.get())
+            num_points = 101 * multiplier  # Convert multiplier to actual points
+            
+            # STEP 2: Determine sweep mode from GUI
+            if self.sweep_mode.get() == 1:  # Checkbox checked = fixed sweeps
+                mode = SweepMode.NUM_SWEEPS
+                sweeps_time = int(self.num_sweeps.get())
+                self.log(f"Starting {sweeps_time} sweep(s) with {num_points} points each")
+            else:  # Continuous/time-based mode
+                mode = SweepMode.TIME
+                time_limit = int(self.time_limit.get() or "0")
+                sweeps_time = time_limit if time_limit > 0 else 3600  # Default 1 hour max
+                self.log(f"Starting continuous scan for {sweeps_time}s with {num_points} points/sweep")
+            
+            # STEP 3: Get serial ports from GUI
+            ports_text = self.ports_text.get("1.0", "end-1c").strip()
+            ports = [p.strip() for p in ports_text.split('\n') if p.strip()]
+            
+            if not ports:
+                self.log("ERROR: No ports specified")
+                return
+            
+            self.log(f"Using ports: {', '.join(ports)}")
+            
+            # STEP 4: Clear previous data for new scan
+            with self.data_lock:
+                self.scan_data = []
+            
+            # STEP 5: Create scan parameters object
+            params = ScanParameters(start_freq, stop_freq, num_points, mode, sweeps_time, ports)
+            
+            # STEP 6: Start async scan with callback links
+            success = self.vna_api.start_scan(
+                params,
+                data_callback=self.on_data_received,    # LINK: C data → Python callback
+                status_callback=self.on_status_update,  # LINK: C status → GUI log
+                error_callback=self.on_scan_error       # LINK: C errors → GUI error handling
+            )
+            
+            # STEP 7: Update GUI state based on result
+            if success:
+                self.start_button.configure(state="disabled")  # Disable start during scan
+                self.stop_button.configure(state="normal")     # Enable stop button
+                # Success message will come from status callback after port opens
+            else:
+                self.log("✗ Failed to start scan")
+                
+        except ValueError as e:
+            self.log(f"ERROR: Invalid parameter - {e}")
+        except Exception as e:
+            self.log(f"ERROR: {e}")
+    
+    def stop_scan(self):
+        """LINK: Stop button → C library stop function"""
+        if not self.vna_api:
+            self.log("ERROR: VNA API not initialized")
+            return
+        
+        # Call C library stop function
+        success = self.vna_api.stop_scan()
+        
+        # Always restore button states 
+        self.start_button.configure(state="normal")
+        self.stop_button.configure(state="disabled")
+        
+        if success:
+            self.log("✓ Scan stopped")
+        else:
+            self.log("✗ Error stopping scan")
+    
+    # ============================================================================
+    # CALLBACK FUNCTIONS - C Library → GUI Updates  
+    # ============================================================================
+    
+    def on_data_received(self, datapoint):
+        """LINK: C library data callback → GUI plot updates
+        
+        Called from C library thread for each data point.
+        Must be thread-safe!
+        """
+        # THREAD-SAFE: Store data with lock
+        with self.data_lock:
+            self.scan_data.append({
+                'vna_id': datapoint.vna_id,
+                'frequency': datapoint.frequency,
+                's11': complex(datapoint.s11_re, datapoint.s11_im),  # Convert to Python complex
+                's21': complex(datapoint.s21_re, datapoint.s21_im),
+                'sweep_number': datapoint.sweep_number,
+                'send_time': datapoint.send_time,
+                'receive_time': datapoint.receive_time
+            })
+        
+        # THREAD-SAFE: Schedule GUI update from main thread
+        self.root.after_idle(self.update_plot_from_data)
+    
+    def on_status_update(self, message: str):
+        """LINK: C library status → GUI log"""
+        self.root.after_idle(lambda: self.log(f"[Status] {message}"))
+        
+        # Only detect final completion, not intermediate messages
+        if "scan completed successfully" in message.lower():
+            self.root.after_idle(self.auto_restore_gui_state)
+        
+        # Detect scan completion and auto-restore GUI state
+        if "completed successfully" in message.lower() or "finished" in message.lower():
+            self.root.after_idle(self.auto_restore_gui_state)
+    
+    def on_scan_error(self, error: str):
+        """LINK: C library errors → GUI error handling"""
+        self.root.after_idle(lambda: self.log(f"[Error] {error}"))
+        self.root.after_idle(self.stop_scan)  # Auto-stop on error
+    
+    def update_plot_from_data(self):
+        """LINK: New data → Real-time plot updates
+        
+        Called from main thread when new data arrives.
+        """
+        with self.data_lock:
+            if not self.scan_data:
+                return
+            
+            # Get recent data (last ~1000 points for performance)
+            recent_data = self.scan_data[-1000:] if len(self.scan_data) > 1000 else self.scan_data
+        
+        # Extract plotting data
+        frequencies = [d['frequency'] / 1e6 for d in recent_data]  # Convert Hz → MHz
+        
+        try:
+            # Choose S11 or S21 based on GUI selection
+            if self.plot_type.get() == "S11 Magnitude (dB)":
+                magnitudes = [20 * np.log10(abs(d['s11'])) if d['s11'] != 0 else -100 
+                             for d in recent_data]
+            else:  # S21
+                magnitudes = [20 * np.log10(abs(d['s21'])) if d['s21'] != 0 else -100 
+                             for d in recent_data]
+            
+            # Update matplotlib plot
+            self.ax.clear()
+            if frequencies and magnitudes:
+                self.ax.plot(frequencies, magnitudes, 'b-', alpha=0.8, linewidth=1)
+            
+            self.ax.set_xlabel("Frequency (MHz)")
+            self.ax.set_ylabel("Magnitude (dB)")
+            self.ax.set_title("Real-time S-Parameter Data")
+            self.ax.grid(True, alpha=0.3)
+            self.canvas.draw()
+            
+            # Update statistics
+            self.stats_label.configure(text=f"Points: {len(self.scan_data)}")
+            
+        except Exception as e:
+            self.log(f"Plot error: {e}")
+    
+    def auto_restore_gui_state(self):
+        """Automatically restore GUI state when scan completes"""
+        if self.vna_api and not self.vna_api.is_scanning():
+            # Only restore if buttons are actually in scanning state
+            if self.start_button.cget("state") == "disabled":
+                self.start_button.configure(state="normal")
+                self.stop_button.configure(state="disabled")
+    
+    def sync_scan_state(self):
+        """Periodically sync GUI state with C library scanning state"""
+        if self.vna_api:
+            c_library_scanning = self.vna_api.is_scanning()
+            gui_thinks_scanning = (self.start_button.cget("state") == "disabled")
+            
+            # If states are out of sync, fix them
+            if not c_library_scanning and gui_thinks_scanning:
+                self.auto_restore_gui_state()
+            elif c_library_scanning and not gui_thinks_scanning:
+                self.start_button.configure(state="disabled")
+                self.stop_button.configure(state="normal")
+        
+        # Schedule next sync check in 2 seconds
+        self.root.after(2000, self.sync_scan_state)
+
     def run(self):
         """Start the GUI main loop"""
         self.update_resolution_display(1)
         self.root.mainloop()
 
 
-
-
-
 if __name__ == "__main__":
     app = VNAScannerGUI()
     app.run()
-    
