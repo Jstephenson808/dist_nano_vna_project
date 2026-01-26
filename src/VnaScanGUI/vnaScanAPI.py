@@ -130,6 +130,9 @@ class VNAScanAPI:
         self._data_callback_func = None
         self._status_callback_func = None
         self._error_callback_func = None
+        
+        # Keep ports array alive during scan to prevent garbage collection
+        self._ports_array = None
 
     def _setup_function_signatures(self):
         """Configure ctypes function signatures for C library functions"""
@@ -181,6 +184,11 @@ class VNAScanAPI:
         Returns:
             True if scan started successfully, False otherwise
         """
+        # Check actual C library state, not just Python flag
+        if self.is_scanning():
+            if error_callback:
+                error_callback("Scan already running")
+            return False
         if self._scan_active:
             if error_callback:
                 error_callback("Scan already running")
@@ -205,12 +213,13 @@ class VNAScanAPI:
         
         try:
             # Convert ports list to ctypes array of strings
-            ports_array = (c_char_p * len(params.ports))()
+            # CRITICAL: Store in instance variable to prevent garbage collection!
+            self._ports_array = (c_char_p * len(params.ports))()
             for i, port in enumerate(params.ports):
                 if isinstance(port, str):
-                    ports_array[i] = port.encode('utf-8')
+                    self._ports_array[i] = port.encode('utf-8')
                 else:
-                    ports_array[i] = port
+                    self._ports_array[i] = port
             
             # Call C library function
             result = self.lib.start_async_scan(
@@ -220,7 +229,7 @@ class VNAScanAPI:
                 params.stop_freq,               # stop frequency
                 params.sweep_mode.value,        # sweep mode
                 params.sweeps_or_time,          # sweeps or time
-                ports_array,                    # ports array
+                self._ports_array,              # ports array - kept alive by instance variable
                 self._data_callback_func,       # data callback
                 self._status_callback_func,     # status callback (can be NULL)
                 self._error_callback_func       # error callback (can be NULL)
@@ -252,9 +261,15 @@ class VNAScanAPI:
         try:
             result = self.lib.stop_async_scan()
             self._scan_active = False
+            
+            # Clear references to allow garbage collection after scan stops
+            self._ports_array = None
+            
             return result == 0
         except Exception:
             self._scan_active = False
+            # Clear references even on exception
+            self._ports_array = None
             return False
 
     def is_scanning(self) -> bool:
@@ -265,7 +280,13 @@ class VNAScanAPI:
             True if scan is active, False otherwise
         """
         try:
-            return bool(self.lib.is_async_scan_active())
+            # Always check actual C library state
+            c_is_scanning = bool(self.lib.is_async_scan_active())
+            
+            # Sync Python flag with C state
+            self._scan_active = c_is_scanning
+            
+            return c_is_scanning
         except Exception:
             return False
 

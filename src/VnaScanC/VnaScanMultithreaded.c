@@ -14,6 +14,14 @@ int VNA_COUNT_GLOBAL = 0;
 static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 struct timeval program_start_time;
 
+// Global state for async scanning (declared early for use in scan_timer)
+static pthread_t async_scan_thread;
+static volatile int async_scan_active = 0;
+static volatile int async_thread_created = 0;  // Track if thread was ever created
+static DataCallback async_data_callback = NULL;
+static StatusCallback async_status_callback = NULL;
+static ErrorCallback async_error_callback = NULL;
+
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
         raise (sig);
@@ -365,14 +373,14 @@ void* scan_producer_num(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
 
-    for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
+    for (int sweep = 0; sweep < args->nbr_sweeps && async_scan_active; sweep++) {
         if (args->nbr_sweeps > 1) {
             printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
         }
 
         int current = args->start;
         int step = (int)round(args->stop - args->start) / ((args->nbr_scans*POINTS)-1);
-        for (int scan = 0; scan < args->nbr_scans; scan++) {
+        for (int scan = 0; scan < args->nbr_scans && async_scan_active; scan++) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
                                                         current,current + step*(POINTS-1));
             // add to buffer
@@ -389,7 +397,7 @@ void* scan_producer_time(void *arguments) {
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
 
     int sweep = 1;
-    while (args->bfr->complete == 0) {
+    while (args->bfr->complete == 0 && async_scan_active) {
         sweep++;
         if (args->nbr_sweeps > 1) {
             printf("[Producer] Starting sweep %d\n", sweep + 1);
@@ -397,7 +405,7 @@ void* scan_producer_time(void *arguments) {
         int total_scans = args->nbr_scans;
         int step = (args->stop - args->start) / total_scans;
         int current = args->start;
-        while (total_scans > 0) {
+        while (total_scans > 0 && async_scan_active) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->serial_port,args->vna_id,
                                                         current,current + step);
             // add to buffer
@@ -414,8 +422,16 @@ void* scan_producer_time(void *arguments) {
 void* scan_timer(void *arguments) { 
     struct scan_timer_args *args = arguments;
     sleep(args->time_to_wait);
+    
+    // Signal completion for both sync and async modes
     args->b->complete = VNA_COUNT_GLOBAL;
-    printf("---\ntimer done\n---\n");
+    async_scan_active = 0;
+    
+    // Notify GUI through status callback
+    if (async_status_callback) {
+        async_status_callback("Timer completed - finishing scan");
+    }
+    
     return NULL;
 }
 
@@ -635,14 +651,6 @@ int fill_test_datapoint(DataPoint *point){
     return 0; // success
 }
 
-// Start of actual implementation
-// Global state for async scanning
-static pthread_t async_scan_thread;
-static volatile int async_scan_active = 0;
-static DataCallback async_data_callback = NULL;
-static StatusCallback async_status_callback = NULL;
-static ErrorCallback async_error_callback = NULL;
-
 /**
  * Convert internal data structure to Python-friendly DataPoint
  */
@@ -848,6 +856,11 @@ int start_async_scan(int num_vnas, int nbr_scans, int start, int stop,
         return -1;
     }
     
+    // Brief wait to allow previous detached thread to fully clean up
+    if (async_thread_created) {
+        usleep(100000);  // Wait 100ms
+    }
+    
     // Validate inputs
     if (num_vnas <= 0 || nbr_scans <= 0 || !ports || !data_cb) {
         if (error_cb) {
@@ -899,6 +912,12 @@ int start_async_scan(int num_vnas, int nbr_scans, int start, int stop,
         }
         return -1;
     }
+    
+    // Detach thread so it auto-cleans up when it exits
+    pthread_detach(async_scan_thread);
+    
+    // Mark that we've successfully created a thread
+    async_thread_created = 1;
     
     // Status callback will be sent after ports are actually opened
     return 0;
