@@ -97,7 +97,8 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // call a scan
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, ports);   
+    const char *user_label = "ManualRun";
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, ports, user_label);   
 
     // finish timing
     gettimeofday(&stop, NULL);

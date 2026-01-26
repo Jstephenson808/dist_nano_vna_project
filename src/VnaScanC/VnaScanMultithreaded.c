@@ -480,11 +480,10 @@ void* scan_timer(void *arguments) {
 void* scan_consumer(void *arguments) {
 
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
-    int total_count = 0;
     FILE *f = args->touchstone_file;
+    printf("ID Label VNA TimeSent TimeRecv Freq SParam Format Value\n");
 
     while (args->bfr->complete < VNA_COUNT_GLOBAL || (args->bfr->count != 0)) {
-
         struct datapoint_nanoVNA_H *data = take_buff(args->bfr);
         if (!data) {
             // take_buff has returned nothing as there was nothing left to take
@@ -500,33 +499,33 @@ void* scan_consumer(void *arguments) {
             struct nanovna_raw_datapoint *p = &data->point[i];
             
             // Console output
-            printf("VNA%d (%d) s:%.6f r:%.6f | %u Hz: S11=%.4f+%.4fj, S21=%.4f+%.4fj\n", 
-                   data->vna_id, total_count,
-                   send_secs, recv_secs,
-                   p->frequency, 
-                   p->s11.re, p->s11.im, 
-                   p->s21.re, p->s21.im);
+            // Row 1: S11 Real
+            printf("%s %s %d %.6f %.6f %u S11 REAL %.10e\n",
+                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.re);
+            // Row 2: S11 Imaginary
+            printf("%s %s %d %.6f %.6f %u S11 IMG %.10e\n",
+                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.im);
+            // Row 3: S21 Real
+            printf("%s %s %d %.6f %.6f %u S21 REAL %.10e\n",
+                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.re);
+            // Row 4: S21 Imaginary
+            printf("%s %s %d %.6f %.6f %u S21 IMG %.10e\n",
+                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.im);
             
             // Touchstone File Output
             if (f) {
-                // 3. CLEANUP: Hardcode the zeros for S12/S22 directly in string
                 fprintf(f, "%u %.10e %.10e %.10e %.10e 0 0 0 0\n",
-                    p->frequency,
-                    p->s11.re, p->s11.im,
-                    p->s21.re, p->s21.im);
+                    p->frequency, p->s11.re, p->s11.im, p->s21.re, p->s21.im);
             }
-
-            total_count++;
         }
 
         free(data->point);
         free(data);
-        data = NULL;
     }
     return NULL;
 }
 
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports){
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports, const char *user_label){
     // Reset VNA_COUNT for clean state on subsequent runs
     VNA_COUNT_GLOBAL = 0;
 
@@ -551,6 +550,10 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     strftime(filename, sizeof(filename), "vna_scan_at_%Y-%m-%d_%H-%M-%S.s2p", tm_info);
+
+    // ID String
+    char id_string[64];
+    strftime(id_string, sizeof(id_string), "%Y%m%d_%H%M%S", tm_info);
 
     FILE *touchstone_file = fopen(filename, "w");
     if (!touchstone_file) {
@@ -635,7 +638,12 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {bounded_buffer, touchstone_file};
+    struct scan_consumer_args consumer_args = {
+        bounded_buffer, 
+        touchstone_file,
+        id_string,
+        (char*)user_label
+    };
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));

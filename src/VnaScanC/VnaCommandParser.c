@@ -111,13 +111,15 @@ void help() {
 
 void scan() {
     char* tok = strtok(NULL, " \n");
+    const char *interactive_label = "InteractiveMode";
+
     if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports);
+        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports, interactive_label);
     }
     else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports);
+        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports, interactive_label);
     }
     else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
