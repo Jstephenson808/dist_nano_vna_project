@@ -631,3 +631,289 @@ int fill_test_datapoint(DataPoint *point){
     return 0; // success
 }
 
+// ============================================================================
+// ASYNC SCANNING API - For Python Integration
+// ============================================================================
+
+// Global state for async scanning
+static pthread_t async_scan_thread;
+static volatile int async_scan_active = 0;
+static DataCallback async_data_callback = NULL;
+static StatusCallback async_status_callback = NULL;
+static ErrorCallback async_error_callback = NULL;
+
+/**
+ * Convert internal data structure to Python-friendly DataPoint
+ */
+static void convert_to_datapoint(struct datapoint_nanoVNA_H* internal_data, 
+                                  DataPoint* output, int point_index) {
+    if (!internal_data || !output || point_index < 0 || point_index >= POINTS) {
+        return;
+    }
+    
+    struct nanovna_raw_datapoint* raw = &internal_data->point[point_index];
+    
+    output->vna_id = internal_data->vna_id;
+    output->frequency = raw->frequency;
+    output->s11_re = raw->s11.re;
+    output->s11_im = raw->s11.im;
+    output->s21_re = raw->s21.re;
+    output->s21_im = raw->s21.im;
+    output->sweep_number = 0;
+    output->send_time = (double)internal_data->send_time.tv_sec + 
+                        (double)internal_data->send_time.tv_usec / 1000000.0;
+    output->receive_time = (double)internal_data->receive_time.tv_sec + 
+                          (double)internal_data->receive_time.tv_usec / 1000000.0;
+}
+
+/**
+ * Modified consumer thread that calls Python callbacks instead of printing
+ */
+static void* async_scan_consumer(void *arguments) {
+    struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
+    int total_count = 0;
+    
+    while (async_scan_active && (args->bfr->complete < VNA_COUNT_GLOBAL || args->bfr->count != 0)) {
+        struct datapoint_nanoVNA_H *data = take_buff(args->bfr);
+        
+        if (!data) {
+            return NULL;
+        }
+        
+        // Convert and send each point via callback
+        for (int i = 0; i < POINTS && async_scan_active; i++) {
+            DataPoint dp;
+            convert_to_datapoint(data, &dp, i);
+            dp.sweep_number = total_count / POINTS;
+            
+            if (async_data_callback) {
+                async_data_callback(&dp);
+            }
+            
+            total_count++;
+        }
+        
+        free(data);
+        data = NULL;
+    }
+    
+    if (async_status_callback) {
+        async_status_callback("Scan consumer thread finished");
+    }
+    
+    return NULL;
+}
+
+/**
+ * Background thread function for async scanning
+ */
+static void* async_scan_thread_func(void *arguments) {
+    struct {
+        int num_vnas;
+        int nbr_scans;
+        int start;
+        int stop;
+        SweepMode sweep_mode;
+        int sweeps;
+        const char **ports;
+    } *args = (void*)arguments;
+    
+    // Declare variable-length arrays first to avoid goto issues
+    struct scan_producer_args producer_args[args->num_vnas];
+    pthread_t producers[args->num_vnas];
+    BoundedBuffer *bounded_buffer = NULL;
+    
+    // Similar setup to run_multithreaded_scan but with async consumer
+    VNA_COUNT_GLOBAL = 0;
+    SERIAL_PORTS = calloc(args->num_vnas, sizeof(int));
+    INITIAL_PORT_SETTINGS = calloc(args->num_vnas, sizeof(struct termios));
+    
+    if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
+        if (async_error_callback) {
+            async_error_callback("Failed to allocate memory for serial port arrays");
+        }
+        goto cleanup;
+    }
+    
+    gettimeofday(&program_start_time, NULL);
+    
+    bounded_buffer = malloc(sizeof(BoundedBuffer));
+    if (!bounded_buffer || create_bounded_buffer(bounded_buffer) != EXIT_SUCCESS) {
+        if (async_error_callback) {
+            async_error_callback("Failed to create bounded buffer");
+        }
+        goto cleanup;
+    }
+    
+    for (int i = 0; i < args->num_vnas && async_scan_active; i++) {
+        SERIAL_PORTS[i] = open_serial(args->ports[i]);
+        if (SERIAL_PORTS[i] < 0) {
+            if (async_error_callback) {
+                char err_msg[256];
+                snprintf(err_msg, sizeof(err_msg), "Failed to open port %s", args->ports[i]);
+                async_error_callback(err_msg);
+            }
+            goto cleanup;
+        }
+        
+        if (configure_serial(SERIAL_PORTS[i], &INITIAL_PORT_SETTINGS[i]) != EXIT_SUCCESS) {
+            if (async_error_callback) {
+                async_error_callback("Failed to configure serial port");
+            }
+            goto cleanup;
+        }
+        VNA_COUNT_GLOBAL++;
+        
+        producer_args[i].vna_id = i;
+        producer_args[i].serial_port = SERIAL_PORTS[i];
+        producer_args[i].nbr_scans = args->nbr_scans;
+        producer_args[i].start = args->start;
+        producer_args[i].stop = args->stop;
+        producer_args[i].nbr_sweeps = args->sweeps;
+        producer_args[i].bfr = bounded_buffer;
+        
+        if (args->sweep_mode == NUM_SWEEPS) {
+            pthread_create(&producers[i], NULL, &scan_producer_num, &producer_args[i]);
+        } else {
+            pthread_create(&producers[i], NULL, &scan_producer_time, &producer_args[i]);
+        }
+    }
+    
+    // Create and start consumer thread
+    pthread_t consumer;
+    struct scan_consumer_args consumer_args = {bounded_buffer};
+    pthread_create(&consumer, NULL, &async_scan_consumer, &consumer_args);
+    
+    // Optional: timer for TIME mode
+    pthread_t timer = 0;
+    if (args->sweep_mode == TIME) {
+        struct scan_timer_args timer_args = {args->sweeps, bounded_buffer};
+        pthread_create(&timer, NULL, &scan_timer, &timer_args);
+    }
+    
+    // Wait for threads to complete
+    for (int i = 0; i < args->num_vnas; i++) {
+        pthread_join(producers[i], NULL);
+    }
+    
+    if (timer) {
+        pthread_join(timer, NULL);
+    }
+    
+    pthread_join(consumer, NULL);
+    
+    if (async_status_callback) {
+        async_status_callback("Scan completed successfully");
+    }
+
+cleanup:
+    // Cleanup
+    if (bounded_buffer) {
+        destroy_bounded_buffer(bounded_buffer);
+    }
+    close_and_reset_all();
+    free(SERIAL_PORTS);
+    SERIAL_PORTS = NULL;
+    free(INITIAL_PORT_SETTINGS);
+    INITIAL_PORT_SETTINGS = NULL;
+    
+    async_scan_active = 0;
+    free(args);
+    
+    return NULL;
+}
+
+/**
+ * Start an asynchronous VNA scan with Python callbacks
+ */
+int start_async_scan(int num_vnas, int nbr_scans, int start, int stop,
+                     int sweep_mode, int sweeps_or_time, const char **ports,
+                     DataCallback data_cb, StatusCallback status_cb, ErrorCallback error_cb) {
+    
+    if (async_scan_active) {
+        if (error_cb) {
+            error_cb("Scan already running");
+        }
+        return -1;
+    }
+    
+    // Validate inputs
+    if (num_vnas <= 0 || nbr_scans <= 0 || !ports || !data_cb) {
+        if (error_cb) {
+            error_cb("Invalid parameters");
+        }
+        return -1;
+    }
+    
+    // Store callbacks
+    async_data_callback = data_cb;
+    async_status_callback = status_cb;
+    async_error_callback = error_cb;
+    async_scan_active = 1;
+    
+    // Allocate and setup thread args
+    typedef struct {
+        int num_vnas;
+        int nbr_scans;
+        int start;
+        int stop;
+        SweepMode sweep_mode;
+        int sweeps;
+        const char **ports;
+    } ThreadArgs;
+    
+    ThreadArgs *args = malloc(sizeof(ThreadArgs));
+    if (!args) {
+        async_scan_active = 0;
+        if (error_cb) {
+            error_cb("Failed to allocate thread arguments");
+        }
+        return -1;
+    }
+    
+    args->num_vnas = num_vnas;
+    args->nbr_scans = nbr_scans;
+    args->start = start;
+    args->stop = stop;
+    args->sweep_mode = (SweepMode)sweep_mode;
+    args->sweeps = sweeps_or_time;
+    args->ports = ports;
+    
+    // Create detached thread for async scanning
+    if (pthread_create(&async_scan_thread, NULL, &async_scan_thread_func, args) != 0) {
+        async_scan_active = 0;
+        free(args);
+        if (error_cb) {
+            error_cb("Failed to create scan thread");
+        }
+        return -1;
+    }
+    
+    if (status_cb) {
+        status_cb("Scan started");
+    }
+    
+    return 0;
+}
+
+/**
+ * Stop the currently running async scan
+ */
+int stop_async_scan(void) {
+    if (!async_scan_active) {
+        return 0;
+    }
+    
+    async_scan_active = 0;
+    sleep(1);
+    
+    return 0;
+}
+
+/**
+ * Check if an async scan is currently running
+ */
+int is_async_scan_active(void) {
+    return async_scan_active ? 1 : 0;
+}
+

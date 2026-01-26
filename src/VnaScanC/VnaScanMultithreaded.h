@@ -236,4 +236,50 @@ typedef struct {
 
 int fill_test_datapoint(DataPoint *point);
 
+/**
+ * Callback function types for async scanning
+ * These are called by the C library to send data and status updates to Python
+ */
+typedef void (*DataCallback)(DataPoint *datapoint);
+typedef void (*StatusCallback)(const char *message);
+typedef void (*ErrorCallback)(const char *error_message);
+
+/**
+ * Start an asynchronous VNA scan with callbacks
+ * 
+ * The scan runs in a background thread and invokes callbacks for each data point.
+ * Only one scan can run at a time; call stop_async_scan() first if a scan is active.
+ * 
+ * @param num_vnas Number of VNAs to scan with
+ * @param nbr_scans Number of scan sweeps to perform
+ * @param start Starting frequency in Hz
+ * @param stop Stopping frequency in Hz
+ * @param sweep_mode 0=NUM_SWEEPS, 1=TIME (determines meaning of sweeps parameter)
+ * @param sweeps_or_time Number of sweeps or time limit in seconds
+ * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
+ * @param data_cb Callback function called for each data point received
+ * @param status_cb Callback function for status messages (can be NULL)
+ * @param error_cb Callback function for errors (can be NULL)
+ * @return 0 on success, -1 on error (e.g., scan already running)
+ */
+int start_async_scan(int num_vnas, int nbr_scans, int start, int stop, 
+                     int sweep_mode, int sweeps_or_time, const char **ports,
+                     DataCallback data_cb, StatusCallback status_cb, ErrorCallback error_cb);
+
+/**
+ * Stop the currently running async scan
+ * 
+ * Safe to call even if no scan is running.
+ * 
+ * @return 0 on success, -1 if error during shutdown
+ */
+int stop_async_scan(void);
+
+/**
+ * Check if an async scan is currently running
+ * 
+ * @return 1 if scan is active, 0 if not
+ */
+int is_async_scan_active(void);
+
 #endif
