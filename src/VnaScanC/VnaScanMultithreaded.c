@@ -499,6 +499,10 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
 
     int error;
 
+    // Set async active flag internally for synchronous mode too
+    // This allows re-use of producer/timer functions
+    async_scan_active = 1;
+
     // Create consumer and producer threads
     BoundedBuffer *bounded_buffer = malloc(sizeof(BoundedBuffer));
     if (!bounded_buffer) {
@@ -955,5 +959,12 @@ int stop_async_scan(void) {
  */
 int is_async_scan_active(void) {
     return async_scan_active ? 1 : 0;
+}
+
+/**
+ * Force set scan active state
+ */
+void set_async_scan_active(int active) {
+    async_scan_active = active;
 }
 

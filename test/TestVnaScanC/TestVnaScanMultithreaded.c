@@ -13,6 +13,10 @@ extern int VNA_COUNT_GLOBAL;
 
 void setUp(void) {
     /* This is run before EACH TEST */
+    // Ensure scanner is active by default for unit tests
+    // Check if set_async_scan_active is available (it should be)
+    set_async_scan_active(1);
+
     if (vna_mocked) {
         // Reset VNA_COUNT for clean state on subsequent runs
         VNA_COUNT_GLOBAL = 0;

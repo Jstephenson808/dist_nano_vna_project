@@ -281,4 +281,11 @@ int stop_async_scan(void);
  */
 int is_async_scan_active(void);
 
+/**
+ * Force set scan active state (helper for unit tests/manual mode)
+ * 
+ * @param active 1 to enable scanning, 0 to disable
+ */
+void set_async_scan_active(int active);
+
 #endif
