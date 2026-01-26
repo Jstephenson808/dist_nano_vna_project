@@ -194,6 +194,36 @@ void test_find_binary_header_fails_gracefully() {
     error = find_binary_header(port,&fp,MASK,POINTS);
     TEST_ASSERT_NOT_EQUAL_INT(0,error);
 }
+void test_open_serial_mac_fallback_success(void) {
+    #ifdef __APPLE__
+        if (!vna_mocked) {
+            TEST_IGNORE_MESSAGE("Cannot test fallback without physical device connected");
+        }
+
+        // Using a path that dooesn't exist on Mac
+        const char *fake_linux_port = "/dev/ttyACM_FAKE";
+
+        // Testing the normal function
+        int raw_fd = open(fake_linux_port, O_RDWR | O_NOCTTY);
+        TEST_ASSERT_LESS_THAN_INT_MESSAGE(0, raw_fd, "Sanity check: path should not exist on Mac");
+
+        // Testing the dynamic function
+        int smart_fd = open_serial(fake_linux_port);
+        TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, smart_fd, "open_serial failed to automatically discover the connected VNA");
+
+        // Clean up
+        if (smart_fd >= 0) close(smart_fd);
+
+    #else
+        TEST_IGNORE_MESSAGE("Skipping Mac-specific test on non-Apple platform");
+    #endif
+}
+void test_open_serial_fails_gracefully_on_bad_path(void) {
+    // This path should fail because it doesn't exist and doesn't contain "ttyACM" hence the fallback won't trigger
+    const char *bad_port = "/dev/ttyNONEXISTENT0";
+    int fd = open_serial(bad_port);
+    TEST_ASSERT_EQUAL_INT(-1, fd);
+}
 
 /**
  * Bounded Buffer create/destroy
@@ -297,6 +327,7 @@ void test_take_buff_cycles() {
     create_bounded_buffer(b);
     b->out = N-1;
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
+    b->buffer[b->out] = data;
     b->count = 1;
     struct datapoint_nanoVNA_H *dataOut = take_buff(b);
     TEST_ASSERT_EQUAL_INT(0,b->out);
@@ -429,6 +460,7 @@ void test_producer_num_takes_correct_points() {
     args.bfr = b;
     scan_producer_num(&args);
     for (int scan = 0; scan < scans; scan++) {
+        TEST_ASSERT_NOT_NULL_MESSAGE(b->buffer[scan], "Producer failed to cappture scan data");
         for (int i = 0; i < POINTS; i++) {
             int expected = start+((scan*POINTS + i)*step);
             TEST_ASSERT_EQUAL_INT(expected,b->buffer[scan]->point[i].frequency);
@@ -535,6 +567,8 @@ int main(int argc, char *argv[]) {
     // serial tests
     RUN_TEST(test_configure_serial_settings_correct);
     RUN_TEST(test_restore_serial_settings_correct);
+    RUN_TEST(test_open_serial_mac_fallback_success);
+    RUN_TEST(test_open_serial_fails_gracefully_on_bad_path);
     RUN_TEST(test_close_and_reset_all_targets);
     RUN_TEST(test_write_command);
     RUN_TEST(test_read_exact_reads_one_byte);

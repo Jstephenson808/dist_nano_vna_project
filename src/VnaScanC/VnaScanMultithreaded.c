@@ -1,4 +1,5 @@
 #include "VnaScanMultithreaded.h"
+#include <glob.h>
 
 /**
  * Declaring global variables (for error handling and port consistency)
@@ -38,13 +39,35 @@ void fatal_error_signal(int sig) {
  * @return File descriptor on success, -1 on failure
  */
 int open_serial(const char *port) {
+    // 1. Trying to open what was passed (Linux/Default behaviour)
     int fd = open(port, O_RDWR | O_NOCTTY);
-    
-    if (fd < 0) {
-        fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
-        return -1;
+    if (fd >= 0) return fd;
+
+    // 2. Dyanmic port detection (MacOS)
+    #ifdef __APPLE__
+    if (strstr(port, "ttyACM") != NULL) {
+        // Checking for the "/dev/cy.usbmodem*" pattern
+        glob_t glob_result;
+
+        if (glob("/dev/cu.usbmodem*", 0, NULL, &glob_result) == 0) {
+            for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+                char *candidate = glob_result.gl_pathv[i];
+
+                // Attempt to open the candidate port
+                fd = open(candidate, O_RDWR | O_NOCTTY);
+                if (fd >= 0) {
+                    globfree(&glob_result);
+                    return fd; // Successfully opened a port
+                }
+            }
+            globfree(&glob_result);
+        }
     }
-    return fd;
+    #endif
+
+    // 3. If all attempts fail, return error
+    fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
+    return -1;
 }
 
 /**
