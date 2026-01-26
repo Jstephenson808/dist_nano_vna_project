@@ -425,11 +425,15 @@ void* scan_timer(void *arguments) {
     
     // Signal completion for both sync and async modes
     args->b->complete = VNA_COUNT_GLOBAL;
-    async_scan_active = 0;
     
-    // Notify GUI through status callback
-    if (async_status_callback) {
-        async_status_callback("Timer completed - finishing scan");
+    // Only modify async state if we're actually in async mode
+    if (async_scan_active) {
+        async_scan_active = 0;
+        
+        // Notify GUI through status callback
+        if (async_status_callback) {
+            async_status_callback("Timer completed - finishing scan");
+        }
     }
     
     return NULL;
