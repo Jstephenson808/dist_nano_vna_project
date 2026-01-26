@@ -481,6 +481,7 @@ void* scan_consumer(void *arguments) {
 
     struct scan_consumer_args *args = (struct scan_consumer_args*)arguments;
     int total_count = 0;
+    FILE *f = args->touchstone_file;
 
     while (args->bfr->complete < VNA_COUNT_GLOBAL || (args->bfr->count != 0)) {
 
@@ -490,16 +491,31 @@ void* scan_consumer(void *arguments) {
             return NULL;
         }
 
+        double send_secs = ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + 
+                            (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1e6);
+        double recv_secs = ((double)(data->receive_time.tv_sec - program_start_time.tv_sec) + 
+                            (double)(data->receive_time.tv_usec - program_start_time.tv_usec) / 1e6);
+
         for (int i = 0; i < POINTS; i++) {
+            struct nanovna_raw_datapoint *p = &data->point[i];
             
-            printf("VNA%d (%d) s:%lf r:%lf | %u Hz: S11=%f+%fj, S21=%f+%fj\n", 
+            // Console output
+            printf("VNA%d (%d) s:%.6f r:%.6f | %u Hz: S11=%.4f+%.4fj, S21=%.4f+%.4fj\n", 
                    data->vna_id, total_count,
-                   ((double)(data->send_time.tv_sec - program_start_time.tv_sec) + (double)(data->send_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   ((double)(data->receive_time.tv_sec - program_start_time.tv_sec) + (double)(data->receive_time.tv_usec - program_start_time.tv_usec) / 1000000.0),
-                   data->point[i].frequency, 
-                   data->point[i].s11.re, data->point[i].s11.im, 
-                   data->point[i].s21.re, data->point[i].s21.im);
+                   send_secs, recv_secs,
+                   p->frequency, 
+                   p->s11.re, p->s11.im, 
+                   p->s21.re, p->s21.im);
             
+            // Touchstone File Output
+            if (f) {
+                // 3. CLEANUP: Hardcode the zeros for S12/S22 directly in string
+                fprintf(f, "%u %.10e %.10e %.10e %.10e 0 0 0 0\n",
+                    p->frequency,
+                    p->s11.re, p->s11.im,
+                    p->s21.re, p->s21.im);
+            }
+
             total_count++;
         }
 
@@ -529,6 +545,23 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     gettimeofday(&program_start_time, NULL);
 
     int error;
+
+    // Create Touchstone file
+    char filename[128];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(filename, sizeof(filename), "vna_scan_at_%Y-%m-%d_%H-%M-%S.s2p", tm_info);
+
+    FILE *touchstone_file = fopen(filename, "w");
+    if (!touchstone_file) {
+        fprintf(stderr, "Warning: Failed to open %s for writing. Scan will continue without saving.\n", filename);
+    } else {
+        printf("Saving data to: %s\n", filename);
+        // Write standard Touchstone Header
+        fprintf(touchstone_file, "! Touchstone file generated from multi-VNA scan\n");
+        fprintf(touchstone_file, "! One file containing all VNAS interleaved\n");
+        fprintf(touchstone_file, "# Hz S RI R 50\n");
+    }
 
     // Create consumer and producer threads
     BoundedBuffer *bounded_buffer = malloc(sizeof(BoundedBuffer));
@@ -602,7 +635,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     }
 
     pthread_t consumer;
-    struct scan_consumer_args consumer_args = {bounded_buffer};
+    struct scan_consumer_args consumer_args = {bounded_buffer, touchstone_file};
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
@@ -634,6 +667,11 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
 
     error = pthread_join(consumer,NULL);
     if(error != 0){printf("Error %i from join consumer:\n", errno);}
+
+    // close touchstone file
+    if (touchstone_file) {
+        fclose(touchstone_file);
+    }
 
     // finish up
     destroy_bounded_buffer(bounded_buffer);

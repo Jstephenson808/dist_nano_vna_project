@@ -195,6 +195,7 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
  */
 struct scan_consumer_args {
     BoundedBuffer *bfr;
+    FILE *touchstone_file;
 };
 void* scan_consumer(void *args);
 
