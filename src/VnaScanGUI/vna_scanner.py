@@ -195,7 +195,8 @@ class VNAScanner:
             commands.append(f"set sweeps {num_sweeps}")
         
         # Add VNAs
-        commands.append(f"vna add")
+        for port in ports:
+            commands.append(f"vna add {port}")
         
         # Start scan
         if time_mode and time_limit > 0:
