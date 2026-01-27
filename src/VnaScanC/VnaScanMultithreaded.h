@@ -139,6 +139,9 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
  */
 struct scan_consumer_args {
     BoundedBuffer *bfr;
+    FILE *touchstone_file;
+    char *id_string;
+    char *label;
 };
 void* scan_consumer(void *args);
 
@@ -164,6 +167,6 @@ typedef enum {
     NUM_SWEEPS,
     TIME
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports, const char *user_label);
 
 #endif

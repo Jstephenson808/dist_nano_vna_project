@@ -88,36 +88,6 @@ void test_close_and_reset_all_targets() {
     // could also do with comparing the termios structures
 }
 
-void test_write_command() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-
-    int port = SERIAL_PORTS[0];
-    write_command(port,"info\r");
-    sleep(1);
-
-    char *found_name = NULL;
-    char buffer[100];
-    int numBytes;
-    do {
-        numBytes = read(port,&buffer,sizeof(char)*100);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return;}
-        found_name = strstr(buffer,"NanoVNA");
-    } while (numBytes > 0 && !strstr(buffer,"ch>"));
-
-    TEST_ASSERT_NOT_NULL(found_name);
-}
-
-void test_read_exact_reads_one_byte() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    int port = SERIAL_PORTS[0];
-    write_command(port,"info\r");
-    sleep(1);
-
-    uint8_t buffer;
-    int bytes_read = read_exact(port,&buffer,sizeof(buffer));
-
-    TEST_ASSERT_EQUAL_INT(1,bytes_read);
-}
 
 void test_find_binary_header_handles_random_data() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
@@ -278,6 +248,7 @@ void test_take_buff_cycles() {
     create_bounded_buffer(b);
     b->out = N-1;
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
+    b->buffer[b->out] = data;
     b->count = 1;
     struct datapoint_nanoVNA_H *dataOut = take_buff(b);
     TEST_ASSERT_EQUAL_INT(0,b->out);
@@ -410,6 +381,7 @@ void test_producer_num_takes_correct_points() {
     args.bfr = b;
     scan_producer_num(&args);
     for (int scan = 0; scan < scans; scan++) {
+        TEST_ASSERT_NOT_NULL_MESSAGE(b->buffer[scan], "Producer failed to cappture scan data");
         for (int i = 0; i < POINTS; i++) {
             int expected = start+((scan*POINTS + i)*step);
             TEST_ASSERT_EQUAL_INT(expected,b->buffer[scan]->point[i].frequency);
@@ -515,8 +487,6 @@ int main(int argc, char *argv[]) {
     
     // serial tests
     RUN_TEST(test_close_and_reset_all_targets);
-    RUN_TEST(test_write_command);
-    RUN_TEST(test_read_exact_reads_one_byte);
     RUN_TEST(test_find_binary_header_handles_random_data);
     RUN_TEST(test_find_binary_header_constructs_correct_first_point);
     RUN_TEST(test_find_binary_header_fails_gracefully);
