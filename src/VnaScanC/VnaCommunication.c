@@ -1,8 +1,8 @@
 #include "VnaCommunication.h"
 #include <glob.h>
 
-int total_connected_vnas = 0;
-char **vna_file_paths = NULL;
+int total_vnas = 0;
+char **vna_names = NULL;
 int * vna_fds = NULL;
 struct termios* vna_initial_settings = NULL;
 
@@ -25,8 +25,8 @@ void fatal_error_signal(int sig) {
  * Goes in reverse order to ensure vna count consistency
  */
 void close_and_reset_all() {
-    while (total_connected_vnas > 0) {
-        int i = total_connected_vnas-1;
+    while (total_vnas > 0) {
+        int i = total_vnas-1;
         // Restore original settings before closing
         if (restore_serial(vna_fds[i], &vna_initial_settings[i]) != 0 && !fatal_error_in_progress) {
             fprintf(stderr, "Error %i restoring settings on port %d: %s\n", 
@@ -38,13 +38,13 @@ void close_and_reset_all() {
             fprintf(stderr, "Error %i closing port %d: %s\n", 
                     errno, i, strerror(errno));
         }
-        total_connected_vnas--;
+        total_vnas--;
     }
 
     free(vna_initial_settings);
     vna_initial_settings = NULL;
-    free(vna_file_paths);
-    vna_file_paths = NULL;
+    free(vna_names);
+    vna_names = NULL;
     free(vna_fds);
     vna_fds = NULL;
 }
@@ -216,15 +216,15 @@ int test_vna(int fd) {
 }
 
 int in_vna_list(const char* vna_path) {
-    for (int i = 0; i < total_connected_vnas; i++) {
-        if (strcmp(vna_path,vna_file_paths[i]) == 0)
+    for (int i = 0; i < total_vnas; i++) {
+        if (strcmp(vna_path,vna_names[i]) == 0)
             return 1;
     }
     return 0;
 }
 
 int add_vna(char* vna_path) {
-    if (total_connected_vnas >= MAXIMUM_VNA_PORTS)
+    if (total_vnas >= MAXIMUM_VNA_PORTS)
         return 1;
     int path_len = strlen(vna_path);
     if (path_len > MAXIMUM_VNA_PATH_LENGTH)
@@ -233,38 +233,38 @@ int add_vna(char* vna_path) {
     if (in_vna_list(vna_path))
         return 3;
     
-    int fd = open_serial(vna_path,&vna_initial_settings[total_connected_vnas]);
+    int fd = open_serial(vna_path,&vna_initial_settings[total_vnas]);
     if (fd < 0)
         return -1;
 
     if (test_vna(fd) != EXIT_SUCCESS) {
-        restore_serial(fd,&vna_initial_settings[total_connected_vnas]);
+        restore_serial(fd,&vna_initial_settings[total_vnas]);
         close(fd);
         return 4;
     }
     
-    vna_file_paths[total_connected_vnas] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    if (!vna_file_paths[total_connected_vnas]) {
-        restore_serial(fd,&vna_initial_settings[total_connected_vnas]);
+    vna_names[total_vnas] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    if (!vna_names[total_vnas]) {
+        restore_serial(fd,&vna_initial_settings[total_vnas]);
         close(fd);
         return -1;
     }
-    strncpy(vna_file_paths[total_connected_vnas],vna_path,path_len);
-    vna_fds[total_connected_vnas] = fd;
-    total_connected_vnas++;
-    
+    strncpy(vna_names[total_vnas],vna_path,path_len);
+    vna_fds[total_vnas] = fd;
+    total_vnas++;
+
     return EXIT_SUCCESS;
 }
 
 int remove_vna(char* vna_path) {
-    for (int i = 0; i < total_connected_vnas; i++) {
-        if (strcmp(vna_path,vna_file_paths[i]) == 0) {
-            if (i != total_connected_vnas-1) {
-                strncpy(vna_file_paths[i],vna_file_paths[total_connected_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
+    for (int i = 0; i < total_vnas; i++) {
+        if (strcmp(vna_path,vna_names[i]) == 0) {
+            if (i != total_vnas-1) {
+                strncpy(vna_names[i],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
             }
-            free(vna_file_paths[total_connected_vnas-1]);
-            vna_file_paths[total_connected_vnas-1] = NULL;
-            total_connected_vnas--;
+            free(vna_names[total_vnas-1]);
+            vna_names[total_vnas-1] = NULL;
+            total_vnas--;
 
             return EXIT_SUCCESS;
         }
@@ -304,20 +304,20 @@ int find_vnas(char** paths, const char* search_dir) {
 
 void vna_id() {
     char* buffer = calloc(sizeof(char),8);
-    for (int i = 0; i < total_connected_vnas; i++) {
+    for (int i = 0; i < total_vnas; i++) {
         write_command(vna_fds[i],"version\r");
         read_exact(vna_fds[i],(uint8_t *)buffer,7);
-        fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_file_paths[i],buffer);
+        fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_names[i],buffer);
     }
 }
 
 void vna_ping() {
-    for (int i = 0; i < total_connected_vnas; i++) {
+    for (int i = 0; i < total_vnas; i++) {
         if (test_vna(vna_fds[i]) == 0) {
-            fprintf(stdout,"    %s says pong\n",vna_file_paths[i]);
+            fprintf(stdout,"    %s says pong\n",vna_names[i]);
         }
         else {
-            fprintf(stdout,"    failed to ping %s\n",vna_file_paths[i]);
+            fprintf(stdout,"    failed to ping %s\n",vna_names[i]);
         }
     }
 }
@@ -338,32 +338,32 @@ int initialise_port_array(const char* init_port) {
         return EXIT_FAILURE;
     }
 
-    if (vna_file_paths) {
+    if (vna_names) {
         fprintf(stderr,"port array already initialised, skipping\n");
         return EXIT_SUCCESS;
     }
 
-    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
-    if (!vna_file_paths || !vna_fds) {
+    if (!vna_names || !vna_fds) {
         fprintf(stderr,"failed to allocate memory for port array\n");
-        if (vna_file_paths) {free(vna_file_paths);vna_file_paths=NULL;}
+        if (vna_names) {free(vna_names);vna_names=NULL;}
         if (vna_fds) {free(vna_fds);vna_fds=NULL;}
         return EXIT_FAILURE;
     }
-    total_connected_vnas = 0;
+    total_vnas = 0;
 
     if (init_port != NULL) {
-        vna_file_paths[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        if (!vna_file_paths[0]) {
+        vna_names[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+        if (!vna_names[0]) {
             fprintf(stderr,"failed to allocate memory for VNA port\n");
             return EXIT_FAILURE;
         }
 
         int port_len = strlen(init_port);
-        strncpy(vna_file_paths[0],init_port,port_len);
+        strncpy(vna_names[0],init_port,port_len);
 
-        total_connected_vnas = 1;
+        total_vnas = 1;
     }
 
     return EXIT_SUCCESS;
