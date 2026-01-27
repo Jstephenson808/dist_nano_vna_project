@@ -119,8 +119,8 @@ class VNAScannerGUI:
         # Time limit
         self.time_limit_label = ctk.CTkLabel(scan_frame, text="Scan Duration (seconds):")
         self.time_limit_label.pack(anchor="w", padx=10)
-        self.time_limit = ctk.CTkEntry(scan_frame, placeholder_text="30")
-        self.time_limit.insert(0, "30")
+        self.time_limit = ctk.CTkEntry(scan_frame, placeholder_text="300")
+        self.time_limit.insert(0, "300")
         self.time_limit.pack(padx=10, pady=(0, 10), fill="x")
         self.time_limit.bind("<KeyRelease>", lambda e: self.update_scan_button_text())
 
@@ -166,7 +166,7 @@ class VNAScannerGUI:
         # Start/Stop buttons in scan control panel
         self.start_button = ctk.CTkButton(
             scan_frame, 
-            text="Start Continuous Scan", 
+            text="Scan for 300 seconds", 
             fg_color=("#16A500", "#14A007"),
             hover_color="#043100",
             font=("Roboto", 14, "bold"),
@@ -553,36 +553,7 @@ class VNAScannerGUI:
         except (ValueError, ZeroDivisionError):
             return 1
     
-    def update_resolution_display(self, slider_value):
-        """Update the resolution display with current multiplier and frequency spacing"""
-        try:
-            multiplier = self.slider_to_multiplier(self.num_scans_slider.get())
-            total_points = multiplier * 101
-            
-            start = int(self.start_freq.get())
-            stop = int(self.stop_freq.get())
-            bandwidth = stop - start
-            
-            if bandwidth > 0 and total_points > 0:
-                spacing_hz = bandwidth / total_points
-                
-                # Format spacing nicely
-                if spacing_hz >= 1e6:
-                    spacing_str = f"{spacing_hz/1e6:.2f} MHz"
-                elif spacing_hz >= 1e3:
-                    spacing_str = f"{spacing_hz/1e3:.2f} kHz"
-                else:
-                    spacing_str = f"{spacing_hz:.1f} Hz"
-                
-                self.resolution_display.configure(
-                    text=f"Multiplier: {multiplier} ({total_points} pts, spacing: {spacing_str})"
-                )
-            else:
-                self.resolution_display.configure(
-                    text=f"Multiplier: {multiplier} ({total_points} pts, spacing: invalid range)"
-                )
-        except ValueError:
-            self.resolution_display.configure(text="Multiplier: 1 (101 pts, spacing: enter valid frequencies)")
+
 
     def slider_to_points(self, slider_value):
         """Convert slider value (0-200) to total points with special scaling.
@@ -649,15 +620,13 @@ class VNAScannerGUI:
     def update_scan_button_text(self):
         """Update the start button text based on time limit and sweep mode"""
         try:
-            time_limit = int(self.time_limit.get() or "0")
+            time_limit = int(self.time_limit.get() or "300")
             if self.sweep_mode.get() == 1:
                 self.start_button.configure(text="Start Sweep Scan")
-            elif time_limit > 0:
-                self.start_button.configure(text=f"Scan for {time_limit} seconds")
             else:
-                self.start_button.configure(text="Start Continuous Scan")
+                self.start_button.configure(text=f"Scan for {time_limit} seconds")
         except ValueError:
-            self.start_button.configure(text="Start Continuous Scan")
+            self.start_button.configure(text="Scan for 300 seconds")
     
     def show_tooltip(self, event, text):
         """Show tooltip near the cursor"""
@@ -1028,7 +997,7 @@ class VNAScannerGUI:
             else:
                 # Ensure time_limit is at least 1 second
                 if time_limit < 1:
-                    time_limit = 30
+                    time_limit = 300
                     self.log(f"Mode: TIMED ({time_limit} seconds) - using default")
                 else:
                     self.log(f"Mode: TIMED ({time_limit} seconds)")
