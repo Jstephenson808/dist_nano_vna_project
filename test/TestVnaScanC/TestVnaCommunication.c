@@ -171,33 +171,33 @@ void test_test_vna_success() {
 /**
  * in_vna_list
  */
-extern char **ports;
-extern int num_vnas;
+extern char **vna_file_paths;
+extern int total_connected_vnas;
 void test_in_vna_list_true() {
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     for (int i = 0; i < 3; i++) {
-        ports[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        strncpy(ports[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
-        num_vnas++;
+        vna_file_paths[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+        strncpy(vna_file_paths[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
+        total_connected_vnas++;
     }
     const char* actual_port = "/dev/ttyACM20";
-    strncpy(ports[1],actual_port,MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(vna_file_paths[1],actual_port,MAXIMUM_VNA_PATH_LENGTH);
 
     TEST_ASSERT_EQUAL_INT(1,in_vna_list(actual_port));
 
     // restore for next
     for (int i = 0; i < 3; i++) {
-        free(ports[i]);
-        num_vnas--;
+        free(vna_file_paths[i]);
+        total_connected_vnas--;
     }
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_in_vna_list_false() {
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     for (int i = 0; i < 3; i++) {
-        ports[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        strncpy(ports[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
+        vna_file_paths[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+        strncpy(vna_file_paths[i],"/dev/ttyACM10",MAXIMUM_VNA_PATH_LENGTH);
     }
     const char* actual_port = "/dev/ttyACM20";
 
@@ -205,11 +205,11 @@ void test_in_vna_list_false() {
 
     // restore for next
     for (int i = 0; i < 3; i++) {
-        free(ports[i]);
-        num_vnas--;
+        free(vna_file_paths[i]);
+        total_connected_vnas--;
     }
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_in_vna_list_empty() {
     const char* actual_port = "/dev/ttyACM20";
@@ -222,61 +222,61 @@ void test_in_vna_list_empty() {
  */
 void test_add_vna_adds() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
-    num_vnas = 0;
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    total_connected_vnas = 0;
 
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, add_vna(mock_ports[0]));
-    TEST_ASSERT_EQUAL_STRING(mock_ports[0],ports[0]);
+    TEST_ASSERT_EQUAL_STRING(mock_ports[0],vna_file_paths[0]);
 
-    num_vnas = 0;
-    free(ports[0]);
-    free(ports);
-    ports = NULL;
+    total_connected_vnas = 0;
+    free(vna_file_paths[0]);
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_add_vna_fails_max_vnas() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
-    num_vnas = MAXIMUM_VNA_PORTS;
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    total_connected_vnas = MAXIMUM_VNA_PORTS;
 
     TEST_ASSERT_EQUAL_INT(1,add_vna(mock_ports[0]));
 
-    num_vnas = 0;
-    free(ports);
-    ports = NULL;
+    total_connected_vnas = 0;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_add_vna_fails_max_path_length() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
 
     char* long_path = "12345678912345678912345678";
     TEST_ASSERT_EQUAL_INT(2,add_vna(long_path));
     
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_add_vna_fails_not_a_file() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
 
     char* fake_file = "/not_a_real_file_name";
     TEST_ASSERT_EQUAL_INT(-1,add_vna(fake_file));
     
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_add_vna_fails_already_connected() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
 
-    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    strncpy(ports[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
-    num_vnas = 1;
+    vna_file_paths[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(vna_file_paths[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
+    total_connected_vnas = 1;
 
     TEST_ASSERT_EQUAL_INT(3,add_vna(mock_ports[0]));
     
-    num_vnas = 0;
-    free(ports);
-    ports = NULL;
+    total_connected_vnas = 0;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_add_vna_fails_not_a_nanovna() {
     TEST_IGNORE_MESSAGE("Needs new non-vna serial simulator script");
@@ -287,31 +287,31 @@ void test_add_vna_fails_not_a_nanovna() {
  */
 void test_remove_vna_removes() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
 
-    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    strncpy(ports[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
-    num_vnas = 1;
+    vna_file_paths[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(vna_file_paths[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
+    total_connected_vnas = 1;
 
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,remove_vna(mock_ports[0]));
     
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 void test_remove_vna_no_such_connection() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    ports = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_file_paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
 
-    ports[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    strncpy(ports[0],"fake_port_name",MAXIMUM_VNA_PATH_LENGTH);
-    num_vnas = 1;
+    vna_file_paths[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    strncpy(vna_file_paths[0],"fake_port_name",MAXIMUM_VNA_PATH_LENGTH);
+    total_connected_vnas = 1;
 
     TEST_ASSERT_EQUAL_INT(EXIT_FAILURE,remove_vna(mock_ports[0]));
     
-    free(ports[0]);
-    num_vnas = 0;
-    free(ports);
-    ports = NULL;
+    free(vna_file_paths[0]);
+    total_connected_vnas = 0;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
 }
 
 /**

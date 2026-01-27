@@ -7,6 +7,7 @@
 #include <termios.h>
 #include <inttypes.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include <fcntl.h>
 #include <errno.h>
