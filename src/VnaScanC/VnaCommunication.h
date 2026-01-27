@@ -146,6 +146,8 @@ int remove_vna_number(int vna_num);
  */
 int find_vnas(char** paths, const char* search_dir);
 
+int add_all_vnas();
+
 /**
  * 
  */

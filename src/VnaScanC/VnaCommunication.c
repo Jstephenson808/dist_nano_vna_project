@@ -322,6 +322,20 @@ int find_vnas(char** paths, const char* search_dir) {
     return count;
 }
 
+int add_all_vnas() {
+    char** paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    int found = find_vnas(paths,"/dev");
+    int added = 0;
+    for (int i = 0; i < found; i++) {
+        int err = add_vna(paths[i]);
+        if (err != 0)
+            err = add_vna(paths[i]);
+        if (err == 0)
+            added++;
+    }
+    return added;
+}
+
 void vna_id() {
     char* buffer = calloc(sizeof(char),8);
     for (int i = 0; i < total_vnas; i++) {

@@ -332,7 +332,9 @@ void vna_commands() {
     if (strcmp(tok,"add") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
-            fprintf(stderr, "please provide an address\n");
+            printf("Attempting to add all found vnas:\n");
+            int added = add_all_vnas();
+            printf("    %d VNAs successfully added\n",added);
             return;
         }
         int err = add_vna(tok);
