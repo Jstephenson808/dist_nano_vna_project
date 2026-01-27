@@ -54,7 +54,7 @@ class TestGUIBasics:
     def test_scan_control_widgets_exist(self, app):
         """Test that scan control widgets are created"""
         assert app.time_limit is not None
-        assert app.num_scans_slider is not None
+        assert app.points_slider is not None
         assert app.sweep_mode is not None
         assert app.num_sweeps is not None
         assert app.start_button is not None
@@ -231,7 +231,7 @@ class TestGUICommands:
 
         # Check log was updated
         log_content = app.log_text.get("1.0", "end")
-        assert "Detected 3 VNA device(s)" in log_content
+        assert "Ready: 3 valid NanoVNA-H device(s)" in log_content
 
     def test_toggle_sweep_mode_enables_sweeps_field(self, app):
         """Test toggle_sweep_mode enables sweeps field when checked"""
@@ -350,8 +350,8 @@ class TestUpdateScanButtonText:
         app.time_limit.insert(0, "0")
 
 
-class TestUpdateResolutionDisplay:
-    """Test update_resolution_display method"""
+class TestUpdatePointsDisplay:
+    """Test update_points_display method"""
 
     @pytest.fixture(scope="class")
     def app(self):
@@ -361,23 +361,23 @@ class TestUpdateResolutionDisplay:
         if app.root:
             app.root.destroy()
 
-    def test_displays_multiplier_and_points(self, app):
-        """Test that display shows multiplier and total points"""
-        app.num_scans_slider.set(0)  # multiplier = 1
-        app.update_resolution_display(None)
+    def test_displays_points_and_scan_info(self, app):
+        """Test that display shows total points and scan parameters"""
+        app.points_slider.set(100)  # 101 points
+        app.update_points_display(None)
 
-        display_text = app.resolution_display.cget("text")
-        assert "Multiplier: 1" in display_text
+        display_text = app.points_display.cget("text")
         assert "101 pts" in display_text
+        assert "1 scan" in display_text
 
     def test_displays_frequency_spacing(self, app):
         """Test that display shows frequency spacing"""
-        app.num_scans_slider.set(0)
-        app.update_resolution_display(None)
+        app.points_slider.set(100)
+        app.update_points_display(None)
 
-        display_text = app.resolution_display.cget("text")
+        display_text = app.points_display.cget("text")
         # Should contain spacing information
-        assert "spacing:" in display_text
+        assert "spacing" in display_text
 
     def test_invalid_frequencies_show_error(self, app):
         """Test that invalid frequencies show appropriate message"""
@@ -386,10 +386,10 @@ class TestUpdateResolutionDisplay:
         app.start_freq.delete(0, "end")
         app.start_freq.insert(0, "invalid")
 
-        app.update_resolution_display(None)
+        app.update_points_display(None)
 
-        display_text = app.resolution_display.cget("text")
-        assert "enter valid frequencies" in display_text
+        display_text = app.points_display.cget("text")
+        assert "Invalid frequency range" in display_text
 
         # Restore
         app.start_freq.delete(0, "end")
