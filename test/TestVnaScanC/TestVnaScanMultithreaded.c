@@ -9,6 +9,8 @@ char **mock_ports;
 extern int points_per_scan;
 extern int vna_count;
 
+extern int* vna_fds;
+
 void setUp(void) {
     /* This is run before EACH TEST */
     points_per_scan = 101;
@@ -20,18 +22,17 @@ void setUp(void) {
                 vna_count++;
             }
         }
+        for (int i = 0; i < vna_count; i++) {
+            tcflush(vna_fds[i],TCIOFLUSH);
+        }
     } else {
-        // tell VnaScanMultithreaded.c we have 1 vna for buffer functions
+        /* tell VnaScanMultithreaded.c we have 1 vna for buffer functions */
         vna_count = 1;
     }
 }
 
-extern int* vna_fds;
 void tearDown(void) {
     /* This is run after EACH TEST */
-    for (int i = 0; i < vna_count; i++) {
-        tcflush(vna_fds[i],TCIOFLUSH);
-    }
     teardown_port_array();
     vna_count = 0;
 }
