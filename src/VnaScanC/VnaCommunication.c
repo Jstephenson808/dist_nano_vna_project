@@ -1,16 +1,39 @@
 #include "VnaCommunication.h"
+#include <glob.h>
 
 int num_vnas = 0;
 char **ports = NULL;
 
 int open_serial(const char *port) {
+    // 1. Trying to open what was passed (Linux/Default behaviour)
     int fd = open(port, O_RDWR | O_NOCTTY);
+    if (fd >= 0) return fd;
     
-    if (fd < 0) {
-        fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
-        return -1;
+     // 2. Dyanmic port detection (MacOS)
+    #ifdef __APPLE__
+    if (strstr(port, "ttyACM") != NULL) {
+        // Checking for the "/dev/cy.usbmodem*" pattern
+        glob_t glob_result;
+
+        if (glob("/dev/cu.usbmodem*", 0, NULL, &glob_result) == 0) {
+            for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+                char *candidate = glob_result.gl_pathv[i];
+
+                // Attempt to open the candidate port
+                fd = open(candidate, O_RDWR | O_NOCTTY);
+                if (fd >= 0) {
+                    globfree(&glob_result);
+                    return fd; // Successfully opened a port
+                }
+            }
+            globfree(&glob_result);
+        }
     }
-    return fd;
+    #endif
+
+    // 3. If all attempts fail, return error
+    fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
+    return -1;
 }
 
 int configure_serial(int serial_port, struct termios *initial_tty) {
@@ -118,6 +141,8 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
     return bytes_read;
 }
 
+#define INFO_SIZE 292
+
 int test_vna(int fd) {
     const int info_size = 292;
 
@@ -128,7 +153,7 @@ int test_vna(int fd) {
         return EXIT_FAILURE;
     }
 
-    char buffer[info_size+1];
+    char buffer[INFO_SIZE+1];
     int num_bytes = read_exact(fd,(uint8_t*)buffer,info_size);
     buffer[num_bytes] = '\0';
     if (strstr(buffer,"NanoVNA-H"))

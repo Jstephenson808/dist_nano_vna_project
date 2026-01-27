@@ -79,6 +79,38 @@ void test_restore_serial_settings_correct() {
     // somehow needs to test that port settings are correct
 }
 
+void test_open_serial_mac_fallback_success(void) {
+    #ifdef __APPLE__
+        if (!vna_mocked) {
+            TEST_IGNORE_MESSAGE("Cannot test fallback without physical device connected");
+        }
+
+        // Using a path that dooesn't exist on Mac
+        const char *fake_linux_port = "/dev/ttyACM_FAKE";
+
+        // Testing the normal function
+        int raw_fd = open(fake_linux_port, O_RDWR | O_NOCTTY);
+        TEST_ASSERT_LESS_THAN_INT_MESSAGE(0, raw_fd, "Sanity check: path should not exist on Mac");
+
+        // Testing the dynamic function
+        int smart_fd = open_serial(fake_linux_port);
+        TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, smart_fd, "open_serial failed to automatically discover the connected VNA");
+
+        // Clean up
+        if (smart_fd >= 0) close(smart_fd);
+
+    #else
+        TEST_IGNORE_MESSAGE("Skipping Mac-specific test on non-Apple platform");
+    #endif
+}
+
+void test_open_serial_fails_gracefully_on_bad_path(void) {
+    // This path should fail because it doesn't exist and doesn't contain "ttyACM" hence the fallback won't trigger
+    const char *bad_port = "/dev/ttyNONEXISTENT0";
+    int fd = open_serial(bad_port);
+    TEST_ASSERT_EQUAL_INT(-1, fd);
+}
+
 void test_write_command() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
 
@@ -161,6 +193,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_write_command);
     RUN_TEST(test_read_exact_reads_one_byte);
     RUN_TEST(test_read_exact_reads_ten_bytes);
+    RUN_TEST(test_open_serial_mac_fallback_success);
+    RUN_TEST(test_open_serial_fails_gracefully_on_bad_path);
 
     return UNITY_END();
 }

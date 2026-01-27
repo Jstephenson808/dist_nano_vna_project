@@ -88,36 +88,6 @@ void test_close_and_reset_all_targets() {
     // could also do with comparing the termios structures
 }
 
-void test_write_command() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-
-    int port = SERIAL_PORTS[0];
-    write_command(port,"info\r");
-    sleep(1);
-
-    char *found_name = NULL;
-    char buffer[100];
-    int numBytes;
-    do {
-        numBytes = read(port,&buffer,sizeof(char)*100);
-        if (numBytes < 0) {printf("Error reading: %s", strerror(errno));return;}
-        found_name = strstr(buffer,"NanoVNA");
-    } while (numBytes > 0 && !strstr(buffer,"ch>"));
-
-    TEST_ASSERT_NOT_NULL(found_name);
-}
-
-void test_read_exact_reads_one_byte() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    int port = SERIAL_PORTS[0];
-    write_command(port,"info\r");
-    sleep(1);
-
-    uint8_t buffer;
-    int bytes_read = read_exact(port,&buffer,sizeof(buffer));
-
-    TEST_ASSERT_EQUAL_INT(1,bytes_read);
-}
 
 void test_find_binary_header_handles_random_data() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
@@ -174,36 +144,6 @@ void test_find_binary_header_fails_gracefully() {
     TEST_ASSERT_EQUAL_INT(0,error);
     error = find_binary_header(port,&fp,MASK,POINTS);
     TEST_ASSERT_NOT_EQUAL_INT(0,error);
-}
-void test_open_serial_mac_fallback_success(void) {
-    #ifdef __APPLE__
-        if (!vna_mocked) {
-            TEST_IGNORE_MESSAGE("Cannot test fallback without physical device connected");
-        }
-
-        // Using a path that dooesn't exist on Mac
-        const char *fake_linux_port = "/dev/ttyACM_FAKE";
-
-        // Testing the normal function
-        int raw_fd = open(fake_linux_port, O_RDWR | O_NOCTTY);
-        TEST_ASSERT_LESS_THAN_INT_MESSAGE(0, raw_fd, "Sanity check: path should not exist on Mac");
-
-        // Testing the dynamic function
-        int smart_fd = open_serial(fake_linux_port);
-        TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, smart_fd, "open_serial failed to automatically discover the connected VNA");
-
-        // Clean up
-        if (smart_fd >= 0) close(smart_fd);
-
-    #else
-        TEST_IGNORE_MESSAGE("Skipping Mac-specific test on non-Apple platform");
-    #endif
-}
-void test_open_serial_fails_gracefully_on_bad_path(void) {
-    // This path should fail because it doesn't exist and doesn't contain "ttyACM" hence the fallback won't trigger
-    const char *bad_port = "/dev/ttyNONEXISTENT0";
-    int fd = open_serial(bad_port);
-    TEST_ASSERT_EQUAL_INT(-1, fd);
 }
 
 /**
@@ -546,13 +486,7 @@ int main(int argc, char *argv[]) {
     }
     
     // serial tests
-    RUN_TEST(test_configure_serial_settings_correct);
-    RUN_TEST(test_restore_serial_settings_correct);
-    RUN_TEST(test_open_serial_mac_fallback_success);
-    RUN_TEST(test_open_serial_fails_gracefully_on_bad_path);
     RUN_TEST(test_close_and_reset_all_targets);
-    RUN_TEST(test_write_command);
-    RUN_TEST(test_read_exact_reads_one_byte);
     RUN_TEST(test_find_binary_header_handles_random_data);
     RUN_TEST(test_find_binary_header_constructs_correct_first_point);
     RUN_TEST(test_find_binary_header_fails_gracefully);
