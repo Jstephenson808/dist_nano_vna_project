@@ -1,6 +1,7 @@
 # Compiled Documents
 *.pdf
 *.ps
+*.s2p
 VnaScan
 VnaScanMultithreaded
 VnaCommandParser
