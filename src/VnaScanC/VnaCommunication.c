@@ -325,15 +325,15 @@ int find_vnas(char** paths, const char* search_dir) {
 void vna_id() {
     char* buffer = calloc(sizeof(char),8);
     for (int i = 0; i < total_vnas; i++) {
-        write_command(vna_fds[i],"version\r");
-        read_exact(vna_fds[i],(uint8_t *)buffer,7);
+        write_command(i,"version\r");
+        read_exact(i,(uint8_t *)buffer,7);
         fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_names[i],buffer);
     }
 }
 
 void vna_ping() {
     for (int i = 0; i < total_vnas; i++) {
-        if (test_vna(vna_fds[i]) == 0) {
+        if (test_vna(i) == 0) {
             fprintf(stdout,"    %s says pong\n",vna_names[i]);
         }
         else {
