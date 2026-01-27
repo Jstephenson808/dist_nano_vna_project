@@ -19,12 +19,13 @@
 #define MAXIMUM_VNA_PATH_LENGTH 25
 
 /**
- * Opens a serial port
+ * Opens a serial port and configures its settings
  * 
  * @param port The device path (e.g., "/dev/ttyACM0")
+ * @param init_tty Memory location to store the initial settings of the port
  * @return File descriptor on success, -1 on failure
  */
-int open_serial(const char *port);
+int open_serial(const char *port, struct termios *init_tty);
 
 /**
  * Configures serial port settings for NanoVNA communication
@@ -34,7 +35,8 @@ int open_serial(const char *port);
  * Will not be restored automatically.
  * 
  * @param serial_port The file descriptor of the open serial port
- * @return The original termios settings to restore later
+ * @param initial_tty A memory location to store the initial settings 
+ * @return 0 on success, another number otherwise.
  */
 int configure_serial(int serial_port, struct termios *initial_tty);
 

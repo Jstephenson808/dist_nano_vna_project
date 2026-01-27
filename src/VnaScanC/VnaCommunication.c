@@ -6,38 +6,87 @@ char **vna_file_paths = NULL;
 int * vna_fds = NULL;
 struct termios* vna_initial_settings = NULL;
 
-//static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
+static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
 
-int open_serial(const char *port) {
-    // 1. Trying to open what was passed (Linux/Default behaviour)
-    int fd = open(port, O_RDWR | O_NOCTTY);
-    if (fd >= 0) return fd;
-    
-     // 2. Dyanmic port detection (MacOS)
-    #ifdef __APPLE__
-    if (strstr(port, "ttyACM") != NULL) {
-        // Checking for the "/dev/cy.usbmodem*" pattern
-        glob_t glob_result;
-
-        if (glob("/dev/cu.usbmodem*", 0, NULL, &glob_result) == 0) {
-            for (size_t i = 0; i < glob_result.gl_pathc; i++) {
-                char *candidate = glob_result.gl_pathv[i];
-
-                // Attempt to open the candidate port
-                fd = open(candidate, O_RDWR | O_NOCTTY);
-                if (fd >= 0) {
-                    globfree(&glob_result);
-                    return fd; // Successfully opened a port
-                }
-            }
-            globfree(&glob_result);
-        }
+void fatal_error_signal(int sig) {
+    if (fatal_error_in_progress) {
+        raise (sig);
     }
-    #endif
+    fatal_error_in_progress = 1;
 
-    // 3. If all attempts fail, return error
-    fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
-    return -1;
+    close_and_reset_all();
+
+    signal (sig, SIG_DFL);
+    raise (sig);
+}
+
+/**
+ * Closes all serial ports and restores their initial settings
+ * Goes in reverse order to ensure vna count consistency
+ */
+void close_and_reset_all() {
+    while (total_connected_vnas > 0) {
+        int i = total_connected_vnas-1;
+        // Restore original settings before closing
+        if (restore_serial(vna_fds[i], &vna_initial_settings[i]) != 0 && !fatal_error_in_progress) {
+            fprintf(stderr, "Error %i restoring settings on port %d: %s\n", 
+                    errno, i, strerror(errno));
+        }
+        
+        // Close the serial port
+        if (close(vna_fds[i]) != 0 && !fatal_error_in_progress) {
+            fprintf(stderr, "Error %i closing port %d: %s\n", 
+                    errno, i, strerror(errno));
+        }
+        total_connected_vnas--;
+    }
+
+    free(vna_initial_settings);
+    vna_initial_settings = NULL;
+    free(vna_file_paths);
+    vna_file_paths = NULL;
+    free(vna_fds);
+    vna_fds = NULL;
+}
+
+int open_serial(const char *port, struct termios *init_tty) {
+    int fd = open(port, O_RDWR | O_NOCTTY);
+    if (fd < 0) {
+         // 2. Dyanmic port detection (MacOS)
+        #ifdef __APPLE__
+        if (strstr(port, "ttyACM") != NULL) {
+            // Checking for the "/dev/cy.usbmodem*" pattern
+            glob_t glob_result;
+
+            if (glob("/dev/cu.usbmodem*", 0, NULL, &glob_result) == 0) {
+                int i = 0;
+                while (i < glob_result.gl_pathc && fd < 0) {
+                    char *candidate = glob_result.gl_pathv[i];
+
+                    // Attempt to open the candidate port
+                    fd = open(candidate, O_RDWR | O_NOCTTY);
+                    i++;
+                }
+                globfree(&glob_result);
+            }
+        }
+        if (fd < 0) {
+            fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
+            return -1;
+        }
+        #else
+        fprintf(stderr, "Error opening serial port %s: %s\n", port, strerror(errno));
+        return -1;
+        #endif
+    }
+
+    if (configure_serial(fd,init_tty) != 0) {
+        fprintf(stderr, "Error configuring port %s: %s\n", port, strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    return fd;
 }
 
 int configure_serial(int serial_port, struct termios *initial_tty) {
@@ -184,32 +233,26 @@ int add_vna(char* vna_path) {
     if (in_vna_list(vna_path))
         return 3;
     
-    int fd = open_serial(vna_path);
+    int fd = open_serial(vna_path,&vna_initial_settings[total_connected_vnas]);
     if (fd < 0)
         return -1;
-    struct termios initial_tty;
-    if (configure_serial(fd, &initial_tty) != EXIT_SUCCESS) {
-        close(fd);
-        return -1;
-    }
 
     if (test_vna(fd) != EXIT_SUCCESS) {
-        restore_serial(fd,&initial_tty);
+        restore_serial(fd,&vna_initial_settings[total_connected_vnas]);
         close(fd);
         return 4;
     }
     
     vna_file_paths[total_connected_vnas] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     if (!vna_file_paths[total_connected_vnas]) {
-        restore_serial(fd,&initial_tty);
+        restore_serial(fd,&vna_initial_settings[total_connected_vnas]);
         close(fd);
         return -1;
     }
     strncpy(vna_file_paths[total_connected_vnas],vna_path,path_len);
+    vna_fds[total_connected_vnas] = fd;
     total_connected_vnas++;
-
-    restore_serial(fd,&initial_tty);
-    close(fd);
+    
     return EXIT_SUCCESS;
 }
 
@@ -289,13 +332,11 @@ void vna_status() {
 
 int initialise_port_array(const char* init_port) {
 
-    /**
     // assign error handler
     if (signal(SIGINT, fatal_error_signal) == SIG_ERR) {
         fprintf(stderr, "An error occurred while setting a signal handler.\n");
         return EXIT_FAILURE;
     }
-    */
 
     if (vna_file_paths) {
         fprintf(stderr,"port array already initialised, skipping\n");
