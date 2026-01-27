@@ -51,13 +51,13 @@ struct datapoint_nanoVNA_H {
  * Finds the binary header in the serial stream
  * Scans byte-by-byte looking for the header pattern (mask + points)
  * 
- * @param fd The file descriptor of the serial port
+ * @param vna_id The program id of the vna to be used
  * @param first_point Pointer to location at which to store the first point of the output
  * @param expected_mask The expected mask value (e.g., 135)
  * @param expected_points The expected points value (e.g., 101)
  * @return EXIT_SUCCESS if header found, EXIT_FAILURE if timeout/header not found or error
  */
-int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
+int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
 
 //------------------------
 // SCAN LOGIC
@@ -85,7 +85,7 @@ struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
 /**
  * 
  */
-struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
+struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -98,7 +98,6 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
  */
 struct scan_producer_args {
     int vna_id;
-    int serial_port;
     int nbr_scans;
     int start;
     int stop;
@@ -146,12 +145,11 @@ void* scan_consumer(void *args);
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
  * @param pps Number of points per scan
- * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
 typedef enum {
     NUM_SWEEPS,
     TIME
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, int *vna_fds, const char *user_label);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char *user_label);
 
 #endif

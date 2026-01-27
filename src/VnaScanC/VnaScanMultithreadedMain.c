@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
     int nbr_scans = 20;
     int sweeps = 5;
     SweepMode sweep_mode = NUM_SWEEPS;
-    int nbr_nanoVNAs = 1;
+    int num_ports_given = 1;
     char **ports;
     char* default_port = "/dev/ttyACM0";
 
@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
 
     if (argc > 1) {
         if (argc < 8) {
-            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <sweep_mode> <sweeps> <points_per_scan> <nbr_nanoVNAs> [port1] [port2] ...\n", argv[0]);
+            fprintf(stderr, "Usage: %s <start_freq> <stop_freq> <nbr_scans> <sweep_mode> <sweeps> <points_per_scan> <nbr_vnas> [port1] [port2] ...\n", argv[0]);
             fprintf(stderr, "Example: %s 50000000 900000000 20 -s 5 101 2 /dev/ttyACM0 /dev/ttyACM1\n\n", argv[0]);
             fprintf(stderr, "Run without arguments for default scan\n");
             return EXIT_FAILURE;
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
         nbr_scans = atoi(argv[3]);
         sweeps = atoi(argv[5]);
         pps = atoi(argv[6]);
-        nbr_nanoVNAs = atoi(argv[7]);
+        num_ports_given = atoi(argv[7]);
         ports = (char **)&argv[8];
 
         // Validation of arguments
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (start_freq <= 0 || stop_freq <= 0 || nbr_scans <= 0 || 
-            nbr_nanoVNAs <= 0 || sweeps <= 0) {
+            num_ports_given <= 0 || sweeps <= 0) {
             fprintf(stderr, "Error: All arguments must be positive numbers\n");
             return EXIT_FAILURE;
         }
@@ -66,9 +66,9 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
 
-        if (argc < 8 + nbr_nanoVNAs) {
-            fprintf(stderr, "Error: Must provide %d serial port path(s) after the 5 parameters\n", nbr_nanoVNAs);
-            fprintf(stderr, "You provided: %d port(s), need: %d\n", argc - 7, nbr_nanoVNAs);
+        if (argc < 8 + num_ports_given) {
+            fprintf(stderr, "Error: Must provide %d serial port path(s) after the 5 parameters\n", num_ports_given);
+            fprintf(stderr, "You provided: %d port(s), need: %d\n", argc - 7, num_ports_given);
             return EXIT_FAILURE;
         }
 
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
 
     } else {
         printf("Running default scan: %ld Hz to %ld Hz, %d points, %d PPS, %d VNA(s), %d sweep(s)\n",
-               start_freq, stop_freq, nbr_scans*pps, pps, nbr_nanoVNAs, sweeps);
+               start_freq, stop_freq, nbr_scans*pps, pps, num_ports_given, sweeps);
         
         // Default: try /dev/ttyACM0
         ports = (char **)&default_port;
@@ -91,14 +91,14 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // connect VNAs
-    int *fds = calloc(sizeof(int),nbr_nanoVNAs);
-    for (int i = 0; i < nbr_nanoVNAs; i++) {
-        fds[i] = add_vna(ports[i]);
+    initialise_port_array();
+    for (int i = 0; i < num_ports_given; i++) {
+        add_vna(ports[i]);
     }
 
     // call a scan
     const char *user_label = "ManualRun";
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, fds, user_label);
+    run_multithreaded_scan(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
 
     // disconnect VNAs
     teardown_port_array();

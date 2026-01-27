@@ -3,147 +3,97 @@
 
 #define UNITY_INCLUDE_CONFIG_H
 
-int vna_mocked = 0;
-int numVNAs;
-const char **test_ports;
+int vnas_mocked = 0;
+char **mock_ports;
 
-extern int *SERIAL_PORTS;
-extern struct termios* INITIAL_PORT_SETTINGS;
-extern int VNA_COUNT_GLOBAL;
-extern int POINTS;
+extern int points_per_scan;
+extern int vna_count;
 
 void setUp(void) {
     /* This is run before EACH TEST */
-    if (vna_mocked) {
-        // Reset VNA_COUNT for clean state on subsequent runs
-        VNA_COUNT_GLOBAL = 0;
-        
-        // Initialise global variables
-        SERIAL_PORTS = calloc(numVNAs, sizeof(int));
-        INITIAL_PORT_SETTINGS = calloc(numVNAs, sizeof(struct termios));
-        
-        if (!SERIAL_PORTS || !INITIAL_PORT_SETTINGS) {
-            fprintf(stderr, "Failed to allocate memory for serial port arrays\n");
-            if (SERIAL_PORTS) {free(SERIAL_PORTS);}
-            if (INITIAL_PORT_SETTINGS) {free(INITIAL_PORT_SETTINGS);}
-            return;
-        }
-
-        for (int i = 0; i < numVNAs; i++) {
-            SERIAL_PORTS[i] = open_serial(test_ports[i]);
-            if (SERIAL_PORTS[i] < 0) {
-                fprintf(stderr, "Failed to open serial port for test\n");
-                close_and_reset_all();
-                free(SERIAL_PORTS);
-                free(INITIAL_PORT_SETTINGS);
-                SERIAL_PORTS = NULL;
-                INITIAL_PORT_SETTINGS = NULL;
-                VNA_COUNT_GLOBAL=0;
-                return;
+    points_per_scan = 101;
+    if (vnas_mocked) {
+        vna_count = 0;
+        initialise_port_array();
+        for (int i = 0; i < vnas_mocked; i++) {
+            if (add_vna(mock_ports[i]) == 0) {
+                vna_count++;
             }
-            if (configure_serial(SERIAL_PORTS[i],&INITIAL_PORT_SETTINGS[i]) != 0) {
-                fprintf(stderr, "Error configuring port for test\n");
-                if (SERIAL_PORTS[i] >= 0)
-                    close(SERIAL_PORTS[i]);
-                close_and_reset_all();
-                free(SERIAL_PORTS);
-                free(INITIAL_PORT_SETTINGS);
-                SERIAL_PORTS = NULL;
-                INITIAL_PORT_SETTINGS = NULL;
-                VNA_COUNT_GLOBAL=0;
-                return;
-            }
-            VNA_COUNT_GLOBAL++;
         }
     } else {
-        // pretend to have one VNA for buffer functions
-        VNA_COUNT_GLOBAL = 1;
+        // tell VnaScanMultithreaded.c we have 1 vna for buffer functions
+        vna_count = 1;
     }
 }
 
+extern int* vna_fds;
 void tearDown(void) {
     /* This is run after EACH TEST */
-    if (vna_mocked) {
-        for (int i = 0; i < VNA_COUNT_GLOBAL; i++)
-            tcflush(SERIAL_PORTS[i],TCIOFLUSH);
-        close_and_reset_all();
-        free(SERIAL_PORTS);
-        SERIAL_PORTS = NULL;
-        free(INITIAL_PORT_SETTINGS);
-        INITIAL_PORT_SETTINGS = NULL;
+    for (int i = 0; i < vna_count; i++) {
+        tcflush(vna_fds[i],TCIOFLUSH);
     }
+    teardown_port_array();
+    vna_count = 0;
 }
 
 /**
  * Serial functions
  */
-void test_close_and_reset_all_targets() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
-    
-    TEST_ASSERT_NOT_EQUAL_INT(0,VNA_COUNT_GLOBAL);
-
-    close_and_reset_all();
-
-    TEST_ASSERT_EQUAL_INT(0,VNA_COUNT_GLOBAL);
-    // could also do with comparing the termios structures
-}
-
-
 void test_find_binary_header_handles_random_data() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(POINTS-1)), POINTS, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
     
-    write_command(port,"info\r");
+    write_command(vna_id,"info\r");
     sleep(1);
-    write_command(port,msg_buff);
+    write_command(vna_id,msg_buff);
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(port,&fp,MASK,POINTS);
+    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
     TEST_ASSERT_EQUAL_INT(0,error);
 
     uint32_t freq;
-    int bytes_read = read_exact(port,(uint8_t*)&freq,sizeof(uint8_t)*4);
+    int bytes_read = read_exact(vna_id,(uint8_t*)&freq,sizeof(uint8_t)*4);
     TEST_ASSERT_EQUAL_INT(4,bytes_read);
     TEST_ASSERT_EQUAL_INT(start+step,freq);
 }
 void test_find_binary_header_constructs_correct_first_point() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(POINTS-1)), POINTS, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
     
-    write_command(port,msg_buff);
+    write_command(vna_id,msg_buff);
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(port,&fp,MASK,POINTS);
-    TEST_ASSERT_EQUAL_INT(0,error);
+    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
 
     TEST_ASSERT_EQUAL_INT(start,fp.frequency);
 }
 void test_find_binary_header_fails_gracefully() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(POINTS-1)), POINTS, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
     
-    write_command(port,msg_buff);
+    write_command(vna_id,msg_buff);
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(port,&fp,MASK,POINTS);
-    TEST_ASSERT_EQUAL_INT(0,error);
-    error = find_binary_header(port,&fp,MASK,POINTS);
-    TEST_ASSERT_NOT_EQUAL_INT(0,error);
+    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
+    error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    TEST_ASSERT_NOT_EQUAL_INT(EXIT_SUCCESS,error);
 }
 
 /**
@@ -296,84 +246,83 @@ void test_take_buff_escapes_block_after_full() {
  * Producer & Helpers
  */
 void test_pull_scan_constructs_valid_data() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(port,1,start,start+(POINTS*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
 
     TEST_ASSERT_NOT_NULL(data);
-    TEST_ASSERT_EQUAL_INT(1,data->vna_id);
+    TEST_ASSERT_EQUAL_INT(0,data->vna_id);
     TEST_ASSERT_NOT_NULL(data->point);
-    for (int i = 0; i < POINTS; i++) {
-        TEST_ASSERT_EQUAL_INT(start+(i*POINTS*1000),data->point[i].frequency);
+    for (int i = 0; i < points_per_scan; i++) {
+        TEST_ASSERT_EQUAL_INT(start+(i*points_per_scan*1000),data->point[i].frequency);
     }
 
     free(data->point);
     free(data);
 }
 void test_pull_scan_takes_correct_number_points_low() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    POINTS = 1;
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    points_per_scan = 1;
+    int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(port,1,start,start+(POINTS*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
 
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT_NOT_NULL(data->point);
-    for (int i = 0; i < POINTS; i++) {
-        TEST_ASSERT_EQUAL_INT(start+(i*POINTS*1000),data->point[i].frequency);
+    for (int i = 0; i < points_per_scan; i++) {
+        TEST_ASSERT_EQUAL_INT(start+(i*points_per_scan*1000),data->point[i].frequency);
     }
 
     free(data->point);
     free(data);
-    POINTS = 101;
+    points_per_scan = 101;
 }
 void test_pull_scan_takes_correct_number_points_high() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    POINTS = 201;
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    points_per_scan = 201;
+    int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(port,1,start,start+(POINTS*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
 
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT_NOT_NULL(data->point);
-    for (int i = 0; i < POINTS; i++) {
-        TEST_ASSERT_EQUAL_INT(start+(i*POINTS*500),data->point[i].frequency);
+    for (int i = 0; i < points_per_scan; i++) {
+        TEST_ASSERT_EQUAL_INT(start+(i*points_per_scan*500),data->point[i].frequency);
     }
 
     free(data->point);
     free(data);
-    POINTS = 101;
+    points_per_scan = 101;
 }
 void test_pull_scan_nulls_malformed_data() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    int vna_id = 0;
     int start = 50000000;
-    write_command(port,"malform\r");
+    write_command(vna_id,"malform\r");
     sleep(1);
     
-    struct datapoint_nanoVNA_H* data = pull_scan(port,1,start,start+(POINTS*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
     TEST_ASSERT_NULL(data);
     sleep(2);
 }
 void test_producer_num_takes_correct_points() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
+    int vna_id = 0;
     int start = 50000000;
     
     BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
     create_bounded_buffer(b);
 
     int scans = 2;
-    int size = ((scans*POINTS-1)*100000);
-    int step = size / (scans*POINTS-1);
+    int size = ((scans*points_per_scan-1)*100000);
+    int step = size / (scans*points_per_scan-1);
 
     struct scan_producer_args args;
-    args.vna_id = 1;
-    args.serial_port = port;
+    args.vna_id = vna_id;
     args.nbr_scans = scans;
     args.start = start;
     args.stop = start+size;
@@ -382,8 +331,8 @@ void test_producer_num_takes_correct_points() {
     scan_producer_num(&args);
     for (int scan = 0; scan < scans; scan++) {
         TEST_ASSERT_NOT_NULL_MESSAGE(b->buffer[scan], "Producer failed to cappture scan data");
-        for (int i = 0; i < POINTS; i++) {
-            int expected = start+((scan*POINTS + i)*step);
+        for (int i = 0; i < points_per_scan; i++) {
+            int expected = start+((scan*points_per_scan + i)*step);
             TEST_ASSERT_EQUAL_INT(expected,b->buffer[scan]->point[i].frequency);
         }
         free(b->buffer[scan]->point);
@@ -392,20 +341,19 @@ void test_producer_num_takes_correct_points() {
     destroy_bounded_buffer(b);
 }
 void test_producer_time_takes_correct_time() {
-    if (!vna_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
-    int port = SERIAL_PORTS[0];
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
+    int vna_id = 0;
     int start = 50000000;
     
     BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
     create_bounded_buffer(b);
 
     int scans = 2;
-    int size = ((scans*POINTS-1)*100000);
+    int size = ((scans*points_per_scan-1)*100000);
     int time_to_scan = 2;
 
     struct scan_producer_args scan_args;
-    scan_args.vna_id = 1;
-    scan_args.serial_port = port;
+    scan_args.vna_id = vna_id;
     scan_args.nbr_scans = scans;
     scan_args.start = start;
     scan_args.stop = start+size;
@@ -456,7 +404,7 @@ void test_consumer_constructs_valid_output() {
     data->vna_id = 1;
     data->send_time = time;
     data->receive_time = time;
-    for (int i = 0; i < POINTS; i++) {
+    for (int i = 0; i < points_per_scan; i++) {
         data->point[i] = (struct nanovna_raw_datapoint) {0,{0,0},{0,0}};
     }
 
@@ -480,13 +428,11 @@ int main(int argc, char *argv[]) {
     if (argc > 1) {
         // args for if using python simulator or not
         // if not, flag to skip serial tests
-        vna_mocked = 1;
-        numVNAs = argc - 1;
-        test_ports = (const char **)&argv[1];
+        vnas_mocked = argc - 1;
+        mock_ports = (char **)&argv[1];
     }
     
     // serial tests
-    RUN_TEST(test_close_and_reset_all_targets);
     RUN_TEST(test_find_binary_header_handles_random_data);
     RUN_TEST(test_find_binary_header_constructs_correct_first_point);
     RUN_TEST(test_find_binary_header_fails_gracefully);

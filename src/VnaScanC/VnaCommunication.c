@@ -126,35 +126,36 @@ int restore_serial(int fd, const struct termios *settings) {
     return EXIT_SUCCESS;
 }
 
-ssize_t write_command(int fd, const char *cmd) {
+ssize_t write_command(int vna_num, const char *cmd) {
     size_t cmd_len = strlen(cmd);
-    ssize_t bytes_written = write(fd, cmd, cmd_len);
+    ssize_t bytes_written = write(vna_fds[vna_num], cmd, cmd_len);
     
     if (bytes_written < 0) {
-        fprintf(stderr, "Error writing to fd %d: %s\n", fd, strerror(errno));
+        fprintf(stderr, "Error writing to fd %d: %s\n", vna_fds[vna_num], strerror(errno));
         return -1;
     } else if (bytes_written < (ssize_t)cmd_len) {
         fprintf(stderr, "Warning: Partial write (%zd of %zu bytes) on fd %d\n", 
-                bytes_written, cmd_len, fd);
+                bytes_written, cmd_len, vna_fds[vna_num]);
     }
     
     return bytes_written;
 }
 
-ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
+ssize_t read_exact(int vna_num, uint8_t *buffer, size_t length) {
     ssize_t bytes_read = 0;
     
     while (bytes_read < (ssize_t)length) {
-        ssize_t n = read(fd, buffer + bytes_read, length - bytes_read);
+        ssize_t n = read(vna_fds[vna_num], buffer + bytes_read, length - bytes_read);
         
         if (n < 0) {
-            fprintf(stderr, "Error reading from fd %d: %s\n", fd, strerror(errno));
+            fprintf(stderr, "Error reading from fd %d: %s\n",
+                     vna_fds[vna_num], strerror(errno));
             return -1;
         } else if (n == 0) {
             // Timeout or end of file
             if (bytes_read > 0) {
                 fprintf(stderr, "Timeout: only read %zd of %zu bytes from fd %d\n", 
-                        bytes_read, length, fd);
+                        bytes_read, length, vna_fds[vna_num]);
             }
             return bytes_read;
         }
@@ -167,23 +168,27 @@ ssize_t read_exact(int fd, uint8_t *buffer, size_t length) {
 
 #define INFO_SIZE 292
 
-int test_vna(int fd) {
-    const int info_size = 292;
+#define INFO_SIZE 292
 
-    tcflush(fd,TCIOFLUSH);
+int test_vna(int vna_num) {
+    tcflush(vna_fds[vna_num],TCIOFLUSH);
     const char *msg = "info\r";
-    if (write_command(fd, msg) < 0) {
+    if (write_command(vna_num, msg) < 0) {
         fprintf(stderr, "Failed to send info command\n");
         return EXIT_FAILURE;
     }
 
     char buffer[INFO_SIZE+1];
-    int num_bytes = read_exact(fd,(uint8_t*)buffer,info_size);
+    int num_bytes = read_exact(vna_num,(uint8_t*)buffer,INFO_SIZE);
     buffer[num_bytes] = '\0';
     if (strstr(buffer,"NanoVNA-H"))
         return EXIT_SUCCESS;
     else
         return EXIT_FAILURE;
+}
+
+int get_vna_count() {
+    return total_vnas;
 }
 
 int in_vna_list(const char* vna_path) {
@@ -207,8 +212,9 @@ int add_vna(char* vna_path) {
     int fd = open_serial(vna_path,&vna_initial_settings[total_vnas]);
     if (fd < 0)
         return -1;
+    vna_fds[total_vnas] = fd;
 
-    if (test_vna(fd) != EXIT_SUCCESS) {
+    if (test_vna(total_vnas) != EXIT_SUCCESS) {
         restore_serial(fd,&vna_initial_settings[total_vnas]);
         close(fd);
         return 4;
@@ -221,7 +227,6 @@ int add_vna(char* vna_path) {
         return -1;
     }
     strncpy(vna_names[total_vnas],vna_path,path_len);
-    vna_fds[total_vnas] = fd;
     total_vnas++;
 
     return EXIT_SUCCESS;

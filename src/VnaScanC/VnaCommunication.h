@@ -63,31 +63,36 @@ int restore_serial(int fd, const struct termios *settings);
 /**
  * Writes a command to the serial port with error checking
  * 
- * @param fd The file descriptor of the serial port
+ * @param vna_num The index of the vna to be used.
  * @param cmd The command string to send (should include \r terminator)
  * @return Number of bytes written on success, -1 on error
  */
-ssize_t write_command(int fd, const char *cmd);
+ssize_t write_command(int vna_num, const char *cmd);
 
 /**
  * Reads exact number of bytes from serial port
  * Handles partial reads by continuing until all bytes are received
  * 
- * @param fd The file descriptor of the serial port
+ * @param vna_num The index of the vna to be used.
  * @param buffer The buffer to read data into
  * @param length The number of bytes to read
  * @return Number of bytes read on success, -1 on error, 0 on timeout
  */
-ssize_t read_exact(int fd, uint8_t *buffer, size_t length);
+ssize_t read_exact(int vna_num, uint8_t *buffer, size_t length);
 
 /**
  * Tests connection to NanoVNA by issuing info command
  * Sends "info" command and checks answered by NanoVNA
  * 
- * @param fd The file descriptor of the serial port
+ * @param vna_num The index of the vna to be used.
  * @return 0 on success, 1 on error / not a VNA
  */
-int test_vna(int fd);
+int test_vna(int vna_num);
+
+/**
+ * public accessor for number of VNAs currently connected.
+ */
+int get_vna_count();
 
 /**
  * Checks if a VNA is already in the connections list

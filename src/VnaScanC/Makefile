@@ -31,7 +31,7 @@ PARSER_LINK = -lpthread -lm
 PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
 PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c $(PARSER_SRC_FILES)
 
-all: TestVnaCommunication VnaScanMultithreaded VnaCommandParser TestVnaCommandParser
+all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser
 
 VnaScan:
 	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
@@ -62,6 +62,9 @@ DebugVnaCommandParser:
 
 DebugTestVnaCommandParser:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${PARSER_TEST_SRC_FILES} -o ${PARSER_TEST_NAME} -DTESTSUITE -g ${PARSER_LINK}
+
+DebugTestVnaCommunication:
+	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${COMMS_TEST_SRC_FILES} -o ${COMMS_TEST_NAME} -g ${MULTI_LINK}
 
 clean:
 	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME} $(PARSER_NAME) $(PARSER_TEST_NAME) $(COMMS_TEST_NAME)
