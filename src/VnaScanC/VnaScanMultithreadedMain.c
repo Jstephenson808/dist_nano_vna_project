@@ -17,8 +17,8 @@ int main(int argc, char *argv[]) {
     int sweeps = 5;
     SweepMode sweep_mode = NUM_SWEEPS;
     int nbr_nanoVNAs = 1;
-    const char **ports;
-    const char* default_port = "/dev/ttyACM0";
+    char **ports;
+    char* default_port = "/dev/ttyACM0";
 
     int pps = 101; // points per scan
 
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
         sweeps = atoi(argv[5]);
         pps = atoi(argv[6]);
         nbr_nanoVNAs = atoi(argv[7]);
-        ports = (const char **)&argv[8];
+        ports = (char **)&argv[8];
 
         // Validation of arguments
         if ((strcmp("-s",argv[4]) == 0)) {
@@ -82,23 +82,26 @@ int main(int argc, char *argv[]) {
                start_freq, stop_freq, nbr_scans*pps, pps, nbr_nanoVNAs, sweeps);
         
         // Default: try /dev/ttyACM0
-        ports = (const char **)&default_port;
+        ports = (char **)&default_port;
         fprintf(stderr, "Warning: No ports specified, will use hardcoded /dev/ttyACM0\n");
-    }
-
-    // assign error handler
-    if (signal(SIGINT, fatal_error_signal) == SIG_ERR) {
-        fprintf(stderr, "An error occurred while setting a signal handler.\n");
-        return EXIT_FAILURE;
     }
 
     // start timing
     struct timeval stop, start;
     gettimeofday(&start, NULL);
 
+    // connect VNAs
+    int *fds = calloc(sizeof(int),nbr_nanoVNAs);
+    for (int i = 0; i < nbr_nanoVNAs; i++) {
+        fds[i] = add_vna(ports[i]);
+    }
+
     // call a scan
     const char *user_label = "ManualRun";
-    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, ports, user_label);   
+    run_multithreaded_scan(nbr_nanoVNAs, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, fds, user_label);
+
+    // disconnect VNAs
+    teardown_port_array();
 
     // finish timing
     gettimeofday(&stop, NULL);

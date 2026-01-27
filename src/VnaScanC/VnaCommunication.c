@@ -14,39 +14,10 @@ void fatal_error_signal(int sig) {
     }
     fatal_error_in_progress = 1;
 
-    close_and_reset_all();
+    teardown_port_array();
 
     signal (sig, SIG_DFL);
     raise (sig);
-}
-
-/**
- * Closes all serial ports and restores their initial settings
- * Goes in reverse order to ensure vna count consistency
- */
-void close_and_reset_all() {
-    while (total_vnas > 0) {
-        int i = total_vnas-1;
-        // Restore original settings before closing
-        if (restore_serial(vna_fds[i], &vna_initial_settings[i]) != 0 && !fatal_error_in_progress) {
-            fprintf(stderr, "Error %i restoring settings on port %d: %s\n", 
-                    errno, i, strerror(errno));
-        }
-        
-        // Close the serial port
-        if (close(vna_fds[i]) != 0 && !fatal_error_in_progress) {
-            fprintf(stderr, "Error %i closing port %d: %s\n", 
-                    errno, i, strerror(errno));
-        }
-        total_vnas--;
-    }
-
-    free(vna_initial_settings);
-    vna_initial_settings = NULL;
-    free(vna_names);
-    vna_names = NULL;
-    free(vna_fds);
-    vna_fds = NULL;
 }
 
 int open_serial(const char *port, struct termios *init_tty) {
@@ -256,20 +227,64 @@ int add_vna(char* vna_path) {
     return EXIT_SUCCESS;
 }
 
-int remove_vna(char* vna_path) {
-    for (int i = 0; i < total_vnas; i++) {
-        if (strcmp(vna_path,vna_names[i]) == 0) {
-            if (i != total_vnas-1) {
-                strncpy(vna_names[i],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
-            }
-            free(vna_names[total_vnas-1]);
-            vna_names[total_vnas-1] = NULL;
-            total_vnas--;
+int remove_vna_name(char* vna_path) {
+    int vna_num = -1;
 
-            return EXIT_SUCCESS;
+    int i = 0;
+    while (i < total_vnas && vna_num < 0) {
+        if (strcmp(vna_path,vna_names[i]) == 0) {
+            vna_num = i;
         }
+        i++;
     }
-    return EXIT_FAILURE;
+    if (vna_num < 0) {
+        return EXIT_FAILURE;
+    }
+
+    if (restore_serial(vna_fds[vna_num],&vna_initial_settings[vna_num]) != 0 && !fatal_error_in_progress) {
+        fprintf(stderr, "Error %i restoring settings on port %d: %s\n", errno, vna_num, strerror(errno));
+    }
+    if (close(vna_fds[vna_num]) != 0 && !fatal_error_in_progress) {
+        fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
+    }
+
+    if (vna_num != total_vnas-1) {
+        strncpy(vna_names[vna_num],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
+        vna_fds[vna_num] = vna_fds[total_vnas-1];
+        vna_initial_settings[vna_num] = vna_initial_settings[total_vnas-1];
+    }
+
+    free(vna_names[total_vnas-1]);
+    vna_names[total_vnas-1] = NULL;
+    total_vnas--;
+
+    return EXIT_SUCCESS;
+}
+
+int remove_vna_number(int vna_num) {
+
+    if (vna_num < 0 || vna_num > total_vnas) {
+        return EXIT_FAILURE;
+    }
+
+    if (restore_serial(vna_fds[vna_num],&vna_initial_settings[vna_num]) != 0 && !fatal_error_in_progress) {
+        fprintf(stderr, "Error %i restoring settings on port %d: %s\n", errno, vna_num, strerror(errno));
+    }
+    if (close(vna_fds[vna_num]) != 0 && !fatal_error_in_progress) {
+        fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
+    }
+
+    if (vna_num != total_vnas-1) {
+        strncpy(vna_names[vna_num],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
+        vna_fds[vna_num] = vna_fds[total_vnas-1];
+        vna_initial_settings[vna_num] = vna_initial_settings[total_vnas-1];
+    }
+
+    free(vna_names[total_vnas-1]);
+    vna_names[total_vnas-1] = NULL;
+    total_vnas--;
+
+    return EXIT_SUCCESS;
 }
 
 int find_vnas(char** paths, const char* search_dir) {
@@ -330,7 +345,7 @@ void vna_status() {
     // doesn't do anything until sweeps etc.
 }
 
-int initialise_port_array(const char* init_port) {
+int initialise_port_array() {
 
     // assign error handler
     if (signal(SIGINT, fatal_error_signal) == SIG_ERR) {
@@ -345,26 +360,29 @@ int initialise_port_array(const char* init_port) {
 
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
-    if (!vna_names || !vna_fds) {
-        fprintf(stderr,"failed to allocate memory for port array\n");
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
+    if (!vna_names || !vna_fds || !vna_initial_settings) {
+        fprintf(stderr,"failed to allocate memory for port arrays\n");
         if (vna_names) {free(vna_names);vna_names=NULL;}
         if (vna_fds) {free(vna_fds);vna_fds=NULL;}
+        if (vna_initial_settings) {free(vna_initial_settings);vna_initial_settings=NULL;}
         return EXIT_FAILURE;
     }
     total_vnas = 0;
 
-    if (init_port != NULL) {
-        vna_names[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        if (!vna_names[0]) {
-            fprintf(stderr,"failed to allocate memory for VNA port\n");
-            return EXIT_FAILURE;
-        }
+    return EXIT_SUCCESS;
+}
 
-        int port_len = strlen(init_port);
-        strncpy(vna_names[0],init_port,port_len);
-
-        total_vnas = 1;
+void teardown_port_array() {
+    while (total_vnas > 0) {
+        int i = total_vnas-1;
+        remove_vna_number(i);
     }
 
-    return EXIT_SUCCESS;
+    free(vna_initial_settings);
+    vna_initial_settings = NULL;
+    free(vna_names);
+    vna_names = NULL;
+    free(vna_fds);
+    vna_fds = NULL;
 }

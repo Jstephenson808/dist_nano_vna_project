@@ -27,11 +27,9 @@ int open_test_ports() {
     }
 
     for (int i = 0; i < num_mocked; i++) {
-        test_fds[i] = open_serial(mock_ports[i]);
+        test_fds[i] = open_serial(mock_ports[i],&test_initial_port_settings[i]);
         if (test_fds[i] < 0)
             fprintf(stderr, "Failed to open serial port for test\n");
-        if (configure_serial(test_fds[i],&test_initial_port_settings[i]) != 0)
-            fprintf(stderr, "Error configuring port for test\n");
         test_vna_count++;
     }
     return test_fds[0];
@@ -220,53 +218,58 @@ void test_in_vna_list_empty() {
 /**
  * add_vna
  */
+extern int * vna_fds;
+extern struct termios* vna_initial_settings;
 void test_add_vna_adds() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
     total_vnas = 0;
 
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, add_vna(mock_ports[0]));
     TEST_ASSERT_EQUAL_STRING(mock_ports[0],vna_names[0]);
 
-    total_vnas = 0;
-    free(vna_names[0]);
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
 void test_add_vna_fails_max_vnas() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
     total_vnas = MAXIMUM_VNA_PORTS;
 
     TEST_ASSERT_EQUAL_INT(1,add_vna(mock_ports[0]));
 
     total_vnas = 0;
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
 void test_add_vna_fails_max_path_length() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
 
     char* long_path = "12345678912345678912345678";
     TEST_ASSERT_EQUAL_INT(2,add_vna(long_path));
     
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
 void test_add_vna_fails_not_a_file() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
 
     char* fake_file = "/not_a_real_file_name";
     TEST_ASSERT_EQUAL_INT(-1,add_vna(fake_file));
-    
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
 void test_add_vna_fails_already_connected() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
 
     vna_names[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     strncpy(vna_names[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
@@ -275,43 +278,46 @@ void test_add_vna_fails_already_connected() {
     TEST_ASSERT_EQUAL_INT(3,add_vna(mock_ports[0]));
     
     total_vnas = 0;
-    free(vna_names);
-    vna_names = NULL;
+    free(vna_names[0]);
+    teardown_port_array();
 }
 void test_add_vna_fails_not_a_nanovna() {
     TEST_IGNORE_MESSAGE("Needs new non-vna serial simulator script");
 }
 
 /**
- * remove_vna
+ * remove_vna_name
  */
-void test_remove_vna_removes() {
+void test_remove_vna_name_removes() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
 
     vna_names[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     strncpy(vna_names[0],mock_ports[0],MAXIMUM_VNA_PATH_LENGTH);
+    vna_fds[0] = open_serial(mock_ports[0],&vna_initial_settings[0]);
     total_vnas = 1;
 
-    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,remove_vna(mock_ports[0]));
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,remove_vna_name(mock_ports[0]));
     
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
-void test_remove_vna_no_such_connection() {
+void test_remove_vna_name_no_such_connection() {
     if (!vna_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
+    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
 
     vna_names[0] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     strncpy(vna_names[0],"fake_port_name",MAXIMUM_VNA_PATH_LENGTH);
     total_vnas = 1;
 
-    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE,remove_vna(mock_ports[0]));
+    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE,remove_vna_name(mock_ports[0]));
     
     free(vna_names[0]);
     total_vnas = 0;
-    free(vna_names);
-    vna_names = NULL;
+    teardown_port_array();
 }
 
 /**
@@ -376,8 +382,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_add_vna_fails_already_connected);
     RUN_TEST(test_add_vna_fails_not_a_nanovna);
 
-    RUN_TEST(test_remove_vna_removes);
-    RUN_TEST(test_remove_vna_no_such_connection);
+    RUN_TEST(test_remove_vna_name_removes);
+    RUN_TEST(test_remove_vna_name_no_such_connection);
 
     RUN_TEST(test_find_vnas_finds_one);
     RUN_TEST(test_find_vnas_finds_zero);

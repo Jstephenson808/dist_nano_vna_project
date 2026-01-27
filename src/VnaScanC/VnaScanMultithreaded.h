@@ -48,15 +48,6 @@ struct datapoint_nanoVNA_H {
 };
 
 /**
- * Closes all ports and restores their initial settings
- * 
- * We loop through the ports in reverse order to ensure that VNA_COUNT is
- * always accurate and if a fatal error occurs a new call of close_and_reset_all()
- * would not try to close an alread-closed port
- */
-void close_and_reset_all();
-
-/**
  * Finds the binary header in the serial stream
  * Scans byte-by-byte looking for the header pattern (mask + points)
  * 
@@ -67,15 +58,6 @@ void close_and_reset_all();
  * @return EXIT_SUCCESS if header found, EXIT_FAILURE if timeout/header not found or error
  */
 int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
-
-/**
- * Fatal error handling. 
- * 
- * Calls close_and_reset_all before allowing the program to exit normally.
- * 
- * @param sig The signal number
- */
-void fatal_error_signal(int sig);
 
 //------------------------
 // SCAN LOGIC
@@ -99,6 +81,11 @@ int create_bounded_buffer(BoundedBuffer *bb);
 void destroy_bounded_buffer(BoundedBuffer *buffer);
 void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data);
 struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
+
+/**
+ * 
+ */
+struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -126,8 +113,6 @@ struct scan_timer_args {
 };
 void* scan_producer_time(void *arguments);
 void* scan_timer(void* arguments);
-
-struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
 
 /**
  * A thread function to print scans from buffer
@@ -167,6 +152,6 @@ typedef enum {
     NUM_SWEEPS,
     TIME
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports, const char *user_label);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, int *vna_fds, const char *user_label);
 
 #endif

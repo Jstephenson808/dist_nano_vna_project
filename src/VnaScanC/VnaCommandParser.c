@@ -65,6 +65,7 @@ SweepMode sweep_mode;
 int pps;
 extern int total_vnas;
 extern const char **vna_names;
+extern int *vna_fds;
 
 void help() {
     char* tok = strtok(NULL, " \n");
@@ -159,11 +160,11 @@ void scan() {
 
     if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, vna_names, interactive_label);
+        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, vna_fds, interactive_label);
     }
     else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, vna_names, interactive_label);
+        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, vna_fds, interactive_label);
     }
     else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
@@ -361,7 +362,7 @@ void vna_commands() {
             fprintf(stderr, "please provide an address\n");
             return;
         }
-        if (remove_vna(tok) != EXIT_SUCCESS) {
+        if (remove_vna_name(tok) != EXIT_SUCCESS) {
             fprintf(stderr,"could not remove VNA %s\n",tok);
             return;
         }
@@ -415,8 +416,7 @@ void initialise_settings() {
     sweep_mode = NUM_SWEEPS;
     pps = 101;
 
-    //const char* default_port = "/dev/ttyACM0";
-    initialise_port_array(NULL);
+    initialise_port_array();
 }
 
 #ifndef TESTSUITE

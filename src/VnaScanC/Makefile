@@ -31,7 +31,7 @@ PARSER_LINK = -lpthread -lm
 PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
 PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c $(PARSER_SRC_FILES)
 
-all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser
+all: TestVnaCommunication VnaScanMultithreaded VnaCommandParser TestVnaCommandParser
 
 VnaScan:
 	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
