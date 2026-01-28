@@ -357,8 +357,13 @@ void vna_ping() {
     }
 }
 
-int vna_reset(const char* vna_port) {
-    return EXIT_FAILURE;
+void vna_reset() {
+    for (int i = 0; i < total_vnas; i++) {
+        write_command(i,"reset\r");
+    }
+    teardown_port_array();
+    initialise_port_array();
+    // add_all_vnas();
 }
 
 void vna_status() {

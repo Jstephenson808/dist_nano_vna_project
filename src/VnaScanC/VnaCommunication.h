@@ -159,9 +159,9 @@ void vna_id();
 void vna_ping();
 
 /**
- * 
+ * sends reset command to all vnas, restarting the devices and closing the connections
  */
-int vna_reset(const char* vna_port);
+void vna_reset();
 
 /**
  * 

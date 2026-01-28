@@ -106,7 +106,8 @@ void help() {
         vna list - lists connected VNAs and searches /dev directory\n\
         for devices of the format ttyACM*\n\
         vna ping - pings all connected VNAs and checks for a response\n\
-        vna id - prints board and version of all connected VNAs\n");
+        vna id - prints board and version of all connected VNAs\n\
+        vna reset - restarts all vnas, closing connections\n");
         } else if (strcmp(tok,"add") == 0) {
             printf("\
     Attempts to connect to the specified VNA device, first checking\n\
@@ -136,6 +137,10 @@ void help() {
     Prints the board and firmware version of every connected VNA\n\
     in the format:\n\
         <num>. <serial_port> <board> version <version>\n");
+        } else if (strcmp(tok,"reset") == 0) {
+            printf("\
+    Sends the rest command to every VNA and closes their connection\n\
+    to this program.\n");
         } else {
             printf("\
     command not recognised. vna subcommands:\n\
@@ -355,8 +360,7 @@ void vna_commands() {
             fprintf(stderr, "Serial device is not a NanoVNA-H\n");
             break;
         }
-    }
-    else if (strcmp(tok,"remove") == 0) {
+    } else if (strcmp(tok,"remove") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             fprintf(stderr, "please provide an address\n");
@@ -366,17 +370,15 @@ void vna_commands() {
             fprintf(stderr,"could not remove VNA %s\n",tok);
             return;
         }
-    }
-    else if (strcmp(tok,"list") == 0) {
+    } else if (strcmp(tok,"list") == 0) {
         list_vnas();
-    }
-    else if (strcmp(tok,"ping") == 0) {
+    } else if (strcmp(tok,"ping") == 0) {
         vna_ping();
-    }
-    else if (strcmp(tok,"id") == 0) {
+    } else if (strcmp(tok,"id") == 0) {
         vna_id();
-    }
-    else {
+    } else if (strcmp(tok,"reset") == 0) {
+        vna_reset();
+    } else {
         printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
     }
 }
