@@ -111,6 +111,8 @@ void help() {
             printf("\
     Attempts to connect to the specified VNA device, first checking\n\
     that it is reachable and that it represents a NanoVNA-H device.\n\
+    If no port name is given, attempts to connect to any USB-serial\n\
+    device connected to your device and check if it is a NanoVNA-H\n\
     Usage example:\n\
         vna add /dev/ttyACM0\n");
         } else if (strcmp(tok,"remove") == 0) {
