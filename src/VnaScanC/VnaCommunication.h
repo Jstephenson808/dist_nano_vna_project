@@ -90,7 +90,7 @@ ssize_t read_exact(int vna_num, uint8_t *buffer, size_t length);
 int test_vna(int vna_num);
 
 /**
- * public accessor for number of VNAs currently connected.
+ * getter function for total_vnas
  */
 int get_vna_count();
 
@@ -149,12 +149,12 @@ int find_vnas(char** paths, const char* search_dir);
 int add_all_vnas();
 
 /**
- * 
+ * gets the firmware version of all connected vnas
  */
 void vna_id();
 
 /**
- * 
+ * pings all connected vnas and checks if they pong
  */
 void vna_ping();
 
@@ -167,6 +167,11 @@ int vna_reset(const char* vna_port);
  * 
  */
 void vna_status();
+
+/**
+ * prints all connected vnas
+ */
+void print_vnas();
 
 /**
  * Assigns memory for and initialises port array

@@ -365,6 +365,12 @@ void vna_status() {
     // doesn't do anything until sweeps etc.
 }
 
+void print_vnas() {
+    for (int i = 0; i < total_vnas; i++) {
+        printf("    %d. %s\n", i+1, vna_names[i]);
+    }
+}
+
 int initialise_port_array() {
 
     // assign error handler

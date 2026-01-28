@@ -63,8 +63,6 @@ int nbr_scans;
 int sweeps;
 SweepMode sweep_mode;
 int pps;
-extern int total_vnas;
-extern const char **vna_names;
 
 void help() {
     char* tok = strtok(NULL, " \n");
@@ -160,11 +158,11 @@ void scan() {
 
     if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
+        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
     }
     else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(total_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
+        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
     }
     else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
@@ -301,14 +299,12 @@ void list() {
         Number of scans: %d\n\
         Number of sweeps: %d\n\
         Points per scan: %d\n\
-        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, total_vnas);
+        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, get_vna_count());
 }
 
 
 void list_vnas() {
-    for (int i = 0; i < total_vnas; i++) {
-        printf("    %d. %s\n", i+1, vna_names[i]);
-    }
+    print_vnas();
     char* new_paths[MAXIMUM_VNA_PORTS];
     int new = find_vnas(new_paths,"/dev");
     if (new > 0) {
