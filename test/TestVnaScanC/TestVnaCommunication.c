@@ -102,7 +102,8 @@ void test_open_serial_mac_fallback_success(void) {
 void test_open_serial_fails_gracefully_on_bad_path(void) {
     // This path should fail because it doesn't exist and doesn't contain "ttyACM" hence the fallback won't trigger
     const char *bad_port = "/dev/ttyNONEXISTENT0";
-    int fd = open_serial(bad_port);
+    struct termios restore_tty;
+    int fd = open_serial(bad_port,&restore_tty);
     TEST_ASSERT_EQUAL_INT(-1, fd);
 }
 
