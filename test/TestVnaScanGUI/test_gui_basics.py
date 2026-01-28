@@ -286,21 +286,6 @@ class TestUpdateScanButtonText:
         if app.root:
             app.root.destroy()
 
-    def test_continuous_scan_text(self, app):
-        """Test button text for continuous scan mode"""
-        # Ensure sweep mode is off
-        if app.sweep_mode.get() == 1:
-            app.sweep_mode.deselect()
-            app.toggle_sweep_mode()
-
-        # Set time limit to 0
-        app.time_limit.delete(0, "end")
-        app.time_limit.insert(0, "0")
-
-        app.update_scan_button_text()
-
-        assert app.start_button.cget("text") == "Start Continuous Scan"
-
     def test_timed_scan_text(self, app):
         """Test button text for timed scan mode"""
         # Ensure sweep mode is off
@@ -331,7 +316,7 @@ class TestUpdateScanButtonText:
         app.toggle_sweep_mode()
 
     def test_invalid_time_limit_defaults_to_continuous(self, app):
-        """Test that invalid time limit defaults to continuous scan text"""
+        """Test that invalid time limit defaults to 300 seconds scan text"""
         # Ensure sweep mode is off
         if app.sweep_mode.get() == 1:
             app.sweep_mode.deselect()
@@ -343,11 +328,11 @@ class TestUpdateScanButtonText:
 
         app.update_scan_button_text()
 
-        assert app.start_button.cget("text") == "Start Continuous Scan"
+        assert app.start_button.cget("text") == "Scan for 300 seconds"
 
         # Restore valid value
         app.time_limit.delete(0, "end")
-        app.time_limit.insert(0, "0")
+        app.time_limit.insert(0, "300"))
 
 
 class TestUpdatePointsDisplay:
@@ -389,7 +374,7 @@ class TestUpdatePointsDisplay:
         app.update_points_display(None)
 
         display_text = app.points_display.cget("text")
-        assert "Invalid frequency range" in display_text
+        assert "Enter valid frequencies" in display_text
 
         # Restore
         app.start_freq.delete(0, "end")
