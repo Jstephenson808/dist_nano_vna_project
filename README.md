@@ -19,6 +19,9 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 
 ```
 ├── README.md
+├── docs/                                   # Documentation and assets
+│   └── images/                             # Screenshots and diagrams
+│       └── vna-scanner-gui.png             # GUI interface screenshot
 ├── src/                                    # Main project directory
 │   ├── VnaScanC/   
 │   │   ├── Makefile                        # Build configuration

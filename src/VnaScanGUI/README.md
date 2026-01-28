@@ -8,6 +8,9 @@ A graphical user interface for controlling NanoVNA (Vector Network Analyzer) dev
 
 This project provides a modern linux GUI application built with Python and CustomTkinter for interfacing with the VnaScanMultithreaded C scanner. It allows users to configure scan parameters, manage multiple VNA devices, and visualize S-parameter data in real-time.
 
+![VNA Scanner Interface](../../docs/images/vna-scanner-gui.png)
+*VNA Scanner interface showing dual-VNA S11 magnitude measurements with real-time plotting*
+
 ### Key Features
 
 - **Modern Dark/Light Theme UI** - Responsive design interface
