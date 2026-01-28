@@ -239,10 +239,16 @@ class VNAScannerGUI:
         ctk.CTkLabel(plot_control, text="Plot Type:", font=("Roboto", 12)).pack(side="left", padx=10)
         self.plot_type = ctk.CTkOptionMenu(
             plot_control,
-            values=["S11 Magnitude (dB)", "S21 Magnitude (dB)"],
+            values=[
+                "LogMag (S11)",
+                "LogMag (S21)",
+                "SWR (S11)",
+                "Linear (S11)",
+                "Linear (S21)"
+            ],
             command=lambda x: self.on_plot_type_changed()
         )
-        self.plot_type.set("S11 Magnitude (dB)")
+        self.plot_type.set("LogMag (S11)")
         self.plot_type.pack(side="left", padx=10)
 
         # Statistics
@@ -407,10 +413,11 @@ class VNAScannerGUI:
         self.scale_slider.configure(command=old_command)
         
         # Update label
+        units = self._current_y_units()
         if current_range >= 1:
-            self.scale_label.configure(text=f"{int(current_range)} dB")
+            self.scale_label.configure(text=f"{int(current_range)} {units}".strip())
         else:
-            self.scale_label.configure(text=f"{current_range:.2f} dB")
+            self.scale_label.configure(text=f"{current_range:.2f} {units}".strip())
         
         # Update Y-pan slider with logarithmic mapping
         import math
@@ -444,6 +451,57 @@ class VNAScannerGUI:
     def on_plot_type_changed(self):
         """Handle plot type change and trigger auto-scale"""
         self.auto_scale_axis()
+
+    def _current_plot_mode(self):
+        """Return tuple (mode, channel) where mode in {'logmag','linear','swr'} and channel in {'S11','S21'}"""
+        pt = self.plot_type.get()
+        if pt.startswith("LogMag"):
+            chan = "S11" if "S11" in pt else "S21"
+            return ("logmag", chan)
+        if pt.startswith("Linear"):
+            chan = "S11" if "S11" in pt else "S21"
+            return ("linear", chan)
+        if pt.startswith("SWR"):
+            return ("swr", "S11")
+        # Legacy fallback
+        if "S11" in pt:
+            return ("logmag", "S11")
+        return ("logmag", "S21")
+
+    def _compute_values_for_plot(self, freq_data, mode, channel):
+        """Given freq_data {freq: (s11_db, s21_db)}, return (sorted_freqs, values) for selected plot"""
+        sorted_freqs = sorted(freq_data.keys())
+        if mode == "logmag":
+            if channel == "S11":
+                values = [freq_data[f][0] for f in sorted_freqs]
+            else:
+                values = [freq_data[f][1] for f in sorted_freqs]
+            return sorted_freqs, values
+        elif mode == "linear":
+            # Convert dB magnitude to linear magnitude |S|
+            if channel == "S11":
+                db_vals = [freq_data[f][0] for f in sorted_freqs]
+            else:
+                db_vals = [freq_data[f][1] for f in sorted_freqs]
+            values = [10 ** (v / 20.0) for v in db_vals]
+            return sorted_freqs, values
+        elif mode == "swr":
+            # SWR from |Γ| where |Γ| = 10^(S11_dB/20)
+            db_vals = [freq_data[f][0] for f in sorted_freqs]
+            rho_vals = [max(0.0, min(0.9999, 10 ** (v / 20.0))) for v in db_vals]
+            values = [(1 + r) / (1 - r) if r < 1.0 else 999.0 for r in rho_vals]
+            return sorted_freqs, values
+        else:
+            values = [freq_data[f][0] for f in sorted_freqs]
+            return sorted_freqs, values
+
+    def _current_y_units(self):
+        mode, _ = self._current_plot_mode()
+        if mode == "logmag":
+            return "dB"
+        if mode == "swr":
+            return "SWR"
+        return ""
     
     def update_scale(self, value):
         """Update Y-axis range based on slider (logarithmic scale)"""
@@ -453,10 +511,11 @@ class VNAScannerGUI:
         slider_pos = float(value)
         range_db = min_db * math.exp(slider_pos * math.log(max_db / min_db))
         
+        units = self._current_y_units()
         if range_db >= 1:
-            self.scale_label.configure(text=f"{int(range_db)} dB")
+            self.scale_label.configure(text=f"{int(range_db)} {units}".strip())
         else:
-            self.scale_label.configure(text=f"{range_db:.2f} dB")
+            self.scale_label.configure(text=f"{range_db:.2f} {units}".strip())
         
         # Adjust y_max to maintain the range centered on current data
         y_center = (self.y_max + self.y_min) / 2
@@ -467,19 +526,18 @@ class VNAScannerGUI:
     
     def auto_scale_axis(self):
         """Automatically adjust Y-axis to fit current data with small buffer"""
-        # Collect all current values
+        # Collect all current values according to selected mode
         all_values = []
-        
+        mode, channel = self._current_plot_mode()
         # From history
         for sweep_data in self.sweep_history:
             for vna_id, freq_data in sweep_data.items():
-                for freq, (s11, s21) in freq_data.items():
-                    all_values.append(s11 if "S11" in self.plot_type.get() else s21)
-        
+                _, vals = self._compute_values_for_plot(freq_data, mode, channel)
+                all_values.extend(vals)
         # From current sweep
         for vna_id, freq_data in self.current_sweep.items():
-            for freq, (s11, s21) in freq_data.items():
-                all_values.append(s11 if "S11" in self.plot_type.get() else s21)
+            _, vals = self._compute_values_for_plot(freq_data, mode, channel)
+            all_values.extend(vals)
         
         if all_values:
             y_min, y_max = min(all_values), max(all_values)
@@ -499,15 +557,17 @@ class VNAScannerGUI:
             slider_pos = math.log(new_range / min_db) / math.log(max_db / min_db)
             self.scale_slider.set(slider_pos)
             
+            units = self._current_y_units()
             if new_range >= 1:
-                self.scale_label.configure(text=f"{int(new_range)} dB")
+                self.scale_label.configure(text=f"{int(new_range)} {units}".strip())
             else:
-                self.scale_label.configure(text=f"{new_range:.2f} dB")
+                self.scale_label.configure(text=f"{new_range:.2f} {units}".strip())
             
             self.auto_scaled = True
             self.update_plot()
             self.update_y_pan_slider()
-            self.log(f"Auto-scaled Y-axis: {self.y_min:.1f} to {self.y_max:.1f} dB")
+            units = self._current_y_units()
+            self.log(f"Auto-scaled Y-axis: {self.y_min:.2f} to {self.y_max:.2f} {units}".strip())
     
     def toggle_sweep_mode(self):
         """Toggle between continuous scan and fixed sweep count mode"""
@@ -742,8 +802,7 @@ class VNAScannerGUI:
             start_mhz, stop_mhz = 50, 900  # Default
             self.ax.set_xlim(start_mhz, stop_mhz)
         
-        plot_type = self.plot_type.get()
-        is_s11 = "S11" in plot_type
+        mode, channel = self._current_plot_mode()
         
         all_values = []  # Collect all values for Y-axis scaling
         
@@ -773,14 +832,9 @@ class VNAScannerGUI:
                 base_color = self.get_vna_color(vna_id, total_vnas)
                 color = self.desaturate_color(base_color, saturation_factor)
                 
-                # Sort by frequency
-                sorted_freqs = sorted(freq_data.keys())
+                # Prepare values for selected plot mode
+                sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
                 freqs_mhz = [f / 1e6 for f in sorted_freqs]
-                
-                if is_s11:
-                    values = [freq_data[f][0] for f in sorted_freqs]  # s11
-                else:
-                    values = [freq_data[f][1] for f in sorted_freqs]  # s21
                 
                 all_values.extend(values)
                 
@@ -796,13 +850,8 @@ class VNAScannerGUI:
                 if freq_data:
                     color = self.get_vna_color(vna_id, total_vnas)
                     
-                    sorted_freqs = sorted(freq_data.keys())
+                    sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
                     freqs_mhz = [f / 1e6 for f in sorted_freqs]
-                    
-                    if is_s11:
-                        values = [freq_data[f][0] for f in sorted_freqs]
-                    else:
-                        values = [freq_data[f][1] for f in sorted_freqs]
                     
                     all_values.extend(values)
                     
@@ -823,10 +872,16 @@ class VNAScannerGUI:
         
         # Labels and styling
         self.ax.set_xlabel("Frequency (MHz)", fontsize=11, fontweight='bold')
-        self.ax.set_ylabel("S11 Magnitude (dB)" if is_s11 else "S21 Magnitude (dB)", 
-                          fontsize=11, fontweight='bold')
-        self.ax.set_title(f"{'S11' if is_s11 else 'S21'} Magnitude vs Frequency", 
-                         fontsize=13, fontweight='bold')
+        y_units = self._current_y_units()
+        if mode == "logmag":
+            self.ax.set_ylabel(f"{channel} LogMag ({y_units})".strip(), fontsize=11, fontweight='bold')
+            self.ax.set_title(f"{channel} LogMag vs Frequency", fontsize=13, fontweight='bold')
+        elif mode == "linear":
+            self.ax.set_ylabel(f"{channel} Linear Magnitude", fontsize=11, fontweight='bold')
+            self.ax.set_title(f"{channel} Linear Magnitude vs Frequency", fontsize=13, fontweight='bold')
+        elif mode == "swr":
+            self.ax.set_ylabel("SWR", fontsize=11, fontweight='bold')
+            self.ax.set_title("SWR (from S11) vs Frequency", fontsize=13, fontweight='bold')
         self.ax.grid(True, alpha=0.3)
         
         # Add comprehensive legend
@@ -840,11 +895,7 @@ class VNAScannerGUI:
             legend_handles.append(Line2D([0], [0], color=color, linewidth=2, 
                                         label=f'VNA {vna_id}'))
         
-        # Add sweep status indicators
-        if self.current_sweep:
-            legend_handles.append(Line2D([0], [0], color='gray', linewidth=3, 
-                                        marker='o', markersize=6, markerfacecolor='gray',
-                                        markeredgecolor='white', label='◉ LIVE (current)'))
+        # Add sweep status indicators (omit live view legend)
         if self.sweep_history:
             legend_handles.append(Line2D([0], [0], color='gray', linewidth=1, 
                                         alpha=0.4, linestyle='-', label=f'History ({len(self.sweep_history)} sweeps)'))

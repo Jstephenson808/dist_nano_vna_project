@@ -445,16 +445,20 @@ class TestPlotTypeSelector:
 
     def test_plot_type_default(self, app):
         """Test default plot type selection"""
-        assert app.plot_type.get() == "S11 Magnitude (dB)"
+        assert app.plot_type.get() == "LogMag (S11)"
 
     def test_plot_type_options(self, app):
         """Test that plot type has expected options"""
-        # Set to S21 and verify it works
-        app.plot_type.set("S21 Magnitude (dB)")
-        assert app.plot_type.get() == "S21 Magnitude (dB)"
-
+        # Set to LogMag S21 and verify it works
+        app.plot_type.set("LogMag (S21)")
+        assert app.plot_type.get() == "LogMag (S21)"
+        # Try Linear and SWR
+        app.plot_type.set("Linear (S11)")
+        assert app.plot_type.get() == "Linear (S11)"
+        app.plot_type.set("SWR (S11)")
+        assert app.plot_type.get() == "SWR (S11)"
         # Reset to default
-        app.plot_type.set("S11 Magnitude (dB)")
+        app.plot_type.set("LogMag (S11)")
 
 
 if __name__ == "__main__":
