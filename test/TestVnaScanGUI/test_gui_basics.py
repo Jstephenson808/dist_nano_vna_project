@@ -332,7 +332,7 @@ class TestUpdateScanButtonText:
 
         # Restore valid value
         app.time_limit.delete(0, "end")
-        app.time_limit.insert(0, "300"))
+        app.time_limit.insert(0, "300")
 
 
 class TestUpdatePointsDisplay:
