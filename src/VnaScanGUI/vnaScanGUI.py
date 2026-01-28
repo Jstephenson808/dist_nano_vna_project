@@ -242,6 +242,7 @@ class VNAScannerGUI:
             values=[
                 "LogMag (S11)",
                 "LogMag (S21)",
+                "Combined (S11 & S21)",
                 "SWR (S11)",
                 "Linear (S11)",
                 "Linear (S21)"
@@ -453,8 +454,10 @@ class VNAScannerGUI:
         self.auto_scale_axis()
 
     def _current_plot_mode(self):
-        """Return tuple (mode, channel) where mode in {'logmag','linear','swr'} and channel in {'S11','S21'}"""
+        """Return tuple (mode, channel) where mode in {'logmag','linear','swr','combined'} and channel in {'S11','S21','BOTH'}"""
         pt = self.plot_type.get()
+        if pt.startswith("Combined"):
+            return ("combined", "BOTH")
         if pt.startswith("LogMag"):
             chan = "S11" if "S11" in pt else "S21"
             return ("logmag", chan)
@@ -497,7 +500,7 @@ class VNAScannerGUI:
 
     def _current_y_units(self):
         mode, _ = self._current_plot_mode()
-        if mode == "logmag":
+        if mode == "logmag" or mode == "combined":
             return "dB"
         if mode == "swr":
             return "SWR"
@@ -532,12 +535,23 @@ class VNAScannerGUI:
         # From history
         for sweep_data in self.sweep_history:
             for vna_id, freq_data in sweep_data.items():
-                _, vals = self._compute_values_for_plot(freq_data, mode, channel)
-                all_values.extend(vals)
+                if mode == "combined":
+                    # Include both S11 and S21 values
+                    sorted_freqs = sorted(freq_data.keys())
+                    all_values.extend([freq_data[f][0] for f in sorted_freqs])  # S11
+                    all_values.extend([freq_data[f][1] for f in sorted_freqs])  # S21
+                else:
+                    _, vals = self._compute_values_for_plot(freq_data, mode, channel)
+                    all_values.extend(vals)
         # From current sweep
         for vna_id, freq_data in self.current_sweep.items():
-            _, vals = self._compute_values_for_plot(freq_data, mode, channel)
-            all_values.extend(vals)
+            if mode == "combined":
+                sorted_freqs = sorted(freq_data.keys())
+                all_values.extend([freq_data[f][0] for f in sorted_freqs])  # S11
+                all_values.extend([freq_data[f][1] for f in sorted_freqs])  # S21
+            else:
+                _, vals = self._compute_values_for_plot(freq_data, mode, channel)
+                all_values.extend(vals)
         
         if all_values:
             y_min, y_max = min(all_values), max(all_values)
@@ -832,17 +846,30 @@ class VNAScannerGUI:
                 base_color = self.get_vna_color(vna_id, total_vnas)
                 color = self.desaturate_color(base_color, saturation_factor)
                 
-                # Prepare values for selected plot mode
-                sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
-                freqs_mhz = [f / 1e6 for f in sorted_freqs]
-                
-                all_values.extend(values)
-                
                 # Thin lines for history
                 linewidth = 0.8 + 0.7 * age_ratio
                 
-                self.ax.plot(freqs_mhz, values, color=color, linewidth=linewidth, 
-                           alpha=alpha, zorder=sweep_idx)
+                if mode == "combined":
+                    # Plot both S11 and S21 with different line styles
+                    sorted_freqs = sorted(freq_data.keys())
+                    freqs_mhz = [f / 1e6 for f in sorted_freqs]
+                    s11_values = [freq_data[f][0] for f in sorted_freqs]
+                    s21_values = [freq_data[f][1] for f in sorted_freqs]
+                    all_values.extend(s11_values)
+                    all_values.extend(s21_values)
+                    # S11: solid line
+                    self.ax.plot(freqs_mhz, s11_values, color=color, linewidth=linewidth, 
+                               alpha=alpha, zorder=sweep_idx, linestyle='-')
+                    # S21: dashed line
+                    self.ax.plot(freqs_mhz, s21_values, color=color, linewidth=linewidth, 
+                               alpha=alpha, zorder=sweep_idx, linestyle='--')
+                else:
+                    # Prepare values for selected plot mode
+                    sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
+                    freqs_mhz = [f / 1e6 for f in sorted_freqs]
+                    all_values.extend(values)
+                    self.ax.plot(freqs_mhz, values, color=color, linewidth=linewidth, 
+                               alpha=alpha, zorder=sweep_idx)
         
         # Plot current sweep (being collected) - PROMINENTLY VISIBLE
         if self.current_sweep:
@@ -850,19 +877,38 @@ class VNAScannerGUI:
                 if freq_data:
                     color = self.get_vna_color(vna_id, total_vnas)
                     
-                    sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
-                    freqs_mhz = [f / 1e6 for f in sorted_freqs]
-                    
-                    all_values.extend(values)
-                    
-                    # Draw white outline/glow behind the current line for visibility
-                    self.ax.plot(freqs_mhz, values, color='white', linewidth=5, 
-                               alpha=0.8, zorder=total_sweeps + 1)
-                    
-                    # Draw the actual current sweep line - thick and bold
-                    self.ax.plot(freqs_mhz, values, color=color, linewidth=3, 
-                               alpha=1.0, zorder=total_sweeps + 2, 
-                               label=f'VNA {vna_id} (LIVE)')
+                    if mode == "combined":
+                        # Plot both S11 and S21 with different line styles
+                        sorted_freqs = sorted(freq_data.keys())
+                        freqs_mhz = [f / 1e6 for f in sorted_freqs]
+                        s11_values = [freq_data[f][0] for f in sorted_freqs]
+                        s21_values = [freq_data[f][1] for f in sorted_freqs]
+                        all_values.extend(s11_values)
+                        all_values.extend(s21_values)
+                        
+                        # S11: solid line with white glow
+                        self.ax.plot(freqs_mhz, s11_values, color='white', linewidth=5, 
+                                   alpha=0.8, zorder=total_sweeps + 1, linestyle='-')
+                        self.ax.plot(freqs_mhz, s11_values, color=color, linewidth=3, 
+                                   alpha=1.0, zorder=total_sweeps + 2, linestyle='-')
+                        
+                        # S21: dashed line with white glow
+                        self.ax.plot(freqs_mhz, s21_values, color='white', linewidth=5, 
+                                   alpha=0.8, zorder=total_sweeps + 1, linestyle='--')
+                        self.ax.plot(freqs_mhz, s21_values, color=color, linewidth=3, 
+                                   alpha=1.0, zorder=total_sweeps + 2, linestyle='--')
+                    else:
+                        sorted_freqs, values = self._compute_values_for_plot(freq_data, mode, channel)
+                        freqs_mhz = [f / 1e6 for f in sorted_freqs]
+                        all_values.extend(values)
+                        
+                        # Draw white outline/glow behind the current line for visibility
+                        self.ax.plot(freqs_mhz, values, color='white', linewidth=5, 
+                                   alpha=0.8, zorder=total_sweeps + 1)
+                        
+                        # Draw the actual current sweep line - thick and bold
+                        self.ax.plot(freqs_mhz, values, color=color, linewidth=3, 
+                                   alpha=1.0, zorder=total_sweeps + 2)
         
         # Apply fixed Y-axis limits from user control
         self.ax.set_ylim(self.y_min, self.y_max)
@@ -876,6 +922,9 @@ class VNAScannerGUI:
         if mode == "logmag":
             self.ax.set_ylabel(f"{channel} LogMag ({y_units})".strip(), fontsize=11, fontweight='bold')
             self.ax.set_title(f"{channel} LogMag vs Frequency", fontsize=13, fontweight='bold')
+        elif mode == "combined":
+            self.ax.set_ylabel(f"Magnitude ({y_units})".strip(), fontsize=11, fontweight='bold')
+            self.ax.set_title("S11 & S21 Combined vs Frequency", fontsize=13, fontweight='bold')
         elif mode == "linear":
             self.ax.set_ylabel(f"{channel} Linear Magnitude", fontsize=11, fontweight='bold')
             self.ax.set_title(f"{channel} Linear Magnitude vs Frequency", fontsize=13, fontweight='bold')
@@ -894,6 +943,13 @@ class VNAScannerGUI:
             color = self.get_vna_color(vna_id, total_vnas)
             legend_handles.append(Line2D([0], [0], color=color, linewidth=2, 
                                         label=f'VNA {vna_id}'))
+        
+        # Add line style legend for combined mode
+        if mode == "combined":
+            legend_handles.append(Line2D([0], [0], color='gray', linewidth=2, 
+                                        linestyle='-', label='S11 (solid)'))
+            legend_handles.append(Line2D([0], [0], color='gray', linewidth=2, 
+                                        linestyle='--', label='S21 (dashed)'))
         
         # Add sweep status indicators (omit live view legend)
         if self.sweep_history:
