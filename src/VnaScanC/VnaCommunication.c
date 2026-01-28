@@ -339,6 +339,7 @@ int add_all_vnas() {
 void vna_id() {
     char* buffer = calloc(sizeof(char),8);
     for (int i = 0; i < total_vnas; i++) {
+        tcflush(vna_fds[i],TCIOFLUSH);
         write_command(i,"version\r");
         read_exact(i,(uint8_t *)buffer,7);
         fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_names[i],buffer);
