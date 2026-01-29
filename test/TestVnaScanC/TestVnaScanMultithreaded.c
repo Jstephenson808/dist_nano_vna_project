@@ -101,7 +101,7 @@ void test_find_binary_header_fails_gracefully() {
  * Bounded Buffer create/destroy
  */
 void test_create_bounded_buffer() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     int error = create_bounded_buffer(b);
     TEST_ASSERT_EQUAL(0,error);
     TEST_ASSERT_NOT_NULL(b->buffer);
@@ -112,7 +112,7 @@ void test_create_bounded_buffer() {
  * Bounded buffer add
  */
 void test_add_buff_adds() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     TEST_ASSERT_EQUAL_INT(0,b->in);
     TEST_ASSERT_EQUAL_INT(0,b->count);
@@ -126,7 +126,7 @@ void test_add_buff_adds() {
     destroy_bounded_buffer(b);
 }
 void test_add_buff_cycles() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     b->in = N-1;
     b->buffer[b->in] = NULL;
@@ -138,7 +138,7 @@ void test_add_buff_cycles() {
     destroy_bounded_buffer(b);
 }
 struct thread_imitator_add_args {
-    BoundedBuffer *b;
+    struct bounded_buffer *b;
     struct datapoint_nanoVNA_H *data;
 };
 void* thread_imitator_add(void *arguments) {
@@ -147,7 +147,7 @@ void* thread_imitator_add(void *arguments) {
     return NULL;
 }
 void test_add_buff_escapes_block_after_full() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     b->count = N;
     b->buffer[b->in] = NULL;
@@ -182,7 +182,7 @@ void test_add_buff_escapes_block_after_full() {
  * Bounded Buffer take
  */
 void test_take_buff_takes() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     b->buffer[b->out] = data;
@@ -195,7 +195,7 @@ void test_take_buff_takes() {
     destroy_bounded_buffer(b);
 }
 void test_take_buff_cycles() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     b->out = N-1;
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
@@ -208,12 +208,12 @@ void test_take_buff_cycles() {
     destroy_bounded_buffer(b);
 }
 void* thread_imitator_take(void *arguments) {
-    struct BoundedBuffer *b = arguments;
+    struct bounded_buffer *b = arguments;
     take_buff(b);
     return NULL;
 }
 void test_take_buff_escapes_block_after_full() {
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
     b->count = 0;
 
@@ -315,7 +315,7 @@ void test_producer_num_takes_correct_points() {
     int vna_id = 0;
     int start = 50000000;
     
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
 
     int scans = 2;
@@ -346,7 +346,7 @@ void test_producer_time_takes_correct_time() {
     int vna_id = 0;
     int start = 50000000;
     
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
 
     int scans = 2;
@@ -395,7 +395,7 @@ void test_producer_time_takes_correct_time() {
  */
 void test_consumer_constructs_valid_output() {
     TEST_IGNORE_MESSAGE("Requires mocking printf()");
-    BoundedBuffer *b = malloc(sizeof(BoundedBuffer));
+    struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
     create_bounded_buffer(b);
 
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
