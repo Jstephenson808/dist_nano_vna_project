@@ -11,6 +11,7 @@
 #include <string.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <math.h>
 #include <time.h>
 #include <stdatomic.h>
@@ -66,7 +67,7 @@ int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, ui
 /**
  * Struct and functions used for shared buffer and concurrency variables
  */
-typedef struct BoundedBuffer {
+struct bounded_buffer {
     struct datapoint_nanoVNA_H **buffer;
     int count;
     int in;
@@ -75,12 +76,12 @@ typedef struct BoundedBuffer {
     pthread_cond_t take_cond;
     pthread_cond_t add_cond;
     pthread_mutex_t lock;
-} BoundedBuffer;
+};
 
-int create_bounded_buffer(BoundedBuffer *bb);
-void destroy_bounded_buffer(BoundedBuffer *buffer);
-void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data);
-struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
+int create_bounded_buffer(struct bounded_buffer  *bb);
+void destroy_bounded_buffer(struct bounded_buffer  *buffer);
+void add_buff(struct bounded_buffer  *buffer, struct datapoint_nanoVNA_H *data);
+struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer  *buffer);
 
 /**
  * 
@@ -102,13 +103,13 @@ struct scan_producer_args {
     int start;
     int stop;
     int nbr_sweeps; 
-    BoundedBuffer *bfr;
+    struct bounded_buffer  *bfr;
 };
 void* scan_producer_num(void *arguments);
 
 struct scan_timer_args {
     int time_to_wait;
-    BoundedBuffer *b;
+    struct bounded_buffer  *b;
 };
 void* scan_producer_time(void *arguments);
 void* scan_timer(void* arguments);
@@ -122,10 +123,11 @@ void* scan_timer(void* arguments);
  * @param args pointer to struct scan_consumer_args
  */
 struct scan_consumer_args {
-    BoundedBuffer *bfr;
+    struct bounded_buffer  *bfr;
     FILE *touchstone_file;
     char *id_string;
     char *label;
+    bool verbose;
 };
 void* scan_consumer(void *args);
 

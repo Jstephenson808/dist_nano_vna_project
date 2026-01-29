@@ -2,11 +2,7 @@
 #include <glob.h>
 
 /**
- * Declaring global variables (for error handling and port consistency)
- * 
- * @SERIAL_PORTS is a pointer to an array of all serial port connections
- * @INITIAL_PORT_SETTINGS is a pointer to an array of all serial port's initial settings
- * @VNA_COUNT is the number of VNAs currently connected
+ * Declaring global variables
  */
 int vna_count = 0;
 int points_per_scan;
@@ -89,24 +85,24 @@ int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, ui
 /**
  * Bounded Buffer handling functions (do not access bounded buffer otherwise)
  */
-int create_bounded_buffer(BoundedBuffer *bb) {
+int create_bounded_buffer(struct bounded_buffer *bb) {
     struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*N);
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer memory\n");
         return EXIT_FAILURE;
     }
-    *bb = (BoundedBuffer){buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
+    *bb = (struct bounded_buffer){buffer,0,0,0,0,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_MUTEX_INITIALIZER};
     return EXIT_SUCCESS;
 }
 
-void destroy_bounded_buffer(BoundedBuffer *buffer) {
+void destroy_bounded_buffer(struct bounded_buffer *buffer) {
     free(buffer->buffer);
     buffer->buffer = NULL;
     free(buffer);
     buffer = NULL;
 }
 
-void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data) {
+void add_buff(struct bounded_buffer *buffer, struct datapoint_nanoVNA_H *data) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == N) {
         pthread_cond_wait(&buffer->take_cond, &buffer->lock);
@@ -119,7 +115,7 @@ void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data) {
     return;
 }
 
-struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer) {
+struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == 0) {
         if (buffer->complete >= vna_count) {
@@ -280,19 +276,20 @@ void* scan_consumer(void *arguments) {
             struct nanovna_raw_datapoint *p = &data->point[i];
             
             // Console output
-            // Row 1: S11 Real
-            printf("%s %s %d %.6f %.6f %u S11 REAL %.10e\n",
-                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.re);
-            // Row 2: S11 Imaginary
-            printf("%s %s %d %.6f %.6f %u S11 IMG %.10e\n",
-                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.im);
-            // Row 3: S21 Real
-            printf("%s %s %d %.6f %.6f %u S21 REAL %.10e\n",
-                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.re);
-            // Row 4: S21 Imaginary
-            printf("%s %s %d %.6f %.6f %u S21 IMG %.10e\n",
-                args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.im);
-            
+            if (args->verbose) {
+                // Row 1: S11 Real
+                printf("%s %s %d %.6f %.6f %u S11 REAL %.10e\n",
+                    args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.re);
+                // Row 2: S11 Imaginary
+                printf("%s %s %d %.6f %.6f %u S11 IMG %.10e\n",
+                    args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s11.im);
+                // Row 3: S21 Real
+                printf("%s %s %d %.6f %.6f %u S21 REAL %.10e\n",
+                    args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.re);
+                // Row 4: S21 Imaginary
+                printf("%s %s %d %.6f %.6f %u S21 IMG %.10e\n",
+                    args->id_string, args->label, data->vna_id, send_secs, recv_secs, p->frequency, p->s21.im);
+            }
             // Touchstone File Output
             if (f) {
                 fprintf(f, "%u %.10e %.10e %.10e %.10e 0 0 0 0\n",
@@ -342,16 +339,16 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     }
 
     // Create consumer and producer threads
-    BoundedBuffer *bounded_buffer = malloc(sizeof(BoundedBuffer));
-    if (!bounded_buffer) {
+    struct bounded_buffer *bb = malloc(sizeof(struct bounded_buffer));
+    if (!bb) {
         fprintf(stderr, "Failed to allocate memory for bounded buffer construct\n");
         return;
     }
-    error = create_bounded_buffer(bounded_buffer);
+    error = create_bounded_buffer(bb);
     if (error != 0) {
         fprintf(stderr, "Failed to create bounded buffer\n");
-        free(bounded_buffer);
-        bounded_buffer = NULL;
+        free(bb);
+        bb = NULL;
         return;
     }
     
@@ -363,7 +360,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
         arguments[i].start = start;
         arguments[i].stop = stop;
         arguments[i].nbr_sweeps = sweeps;
-        arguments[i].bfr = bounded_buffer;
+        arguments[i].bfr = bb;
 
         if (sweep_mode == NUM_SWEEPS) {
             error = pthread_create(&producers[i], NULL, &scan_producer_num, &arguments[i]);
@@ -378,22 +375,23 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
 
     pthread_t consumer;
     struct scan_consumer_args consumer_args = {
-        bounded_buffer, 
+        bb, 
         touchstone_file,
         id_string,
-        (char*)user_label
+        (char*)user_label,
+        true
     };
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        destroy_bounded_buffer(bounded_buffer);
-        bounded_buffer=NULL;
+        destroy_bounded_buffer(bb);
+        bb=NULL;
         return;
     }
 
     if (sweep_mode == TIME) {
         pthread_t timer;
-        struct scan_timer_args timer_args= (struct scan_timer_args){sweeps,bounded_buffer};
+        struct scan_timer_args timer_args= (struct scan_timer_args){sweeps,bb};
         error = pthread_create(&timer, NULL, &scan_timer, &timer_args);
         if(error != 0){
             fprintf(stderr, "Error %i creating timer thread: %s\n", errno, strerror(errno));
@@ -422,7 +420,7 @@ void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, Sw
     }
 
     // finish up
-    destroy_bounded_buffer(bounded_buffer);
-    bounded_buffer = NULL;
+    destroy_bounded_buffer(bb);
+    bb = NULL;
     return;
 }
