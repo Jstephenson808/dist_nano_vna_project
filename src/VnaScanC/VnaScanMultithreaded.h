@@ -11,6 +11,7 @@
 #include <string.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <math.h>
 #include <time.h>
 #include <stdatomic.h>
@@ -48,34 +49,16 @@ struct datapoint_nanoVNA_H {
 };
 
 /**
- * Closes all ports and restores their initial settings
- * 
- * We loop through the ports in reverse order to ensure that VNA_COUNT is
- * always accurate and if a fatal error occurs a new call of close_and_reset_all()
- * would not try to close an alread-closed port
- */
-void close_and_reset_all();
-
-/**
  * Finds the binary header in the serial stream
  * Scans byte-by-byte looking for the header pattern (mask + points)
  * 
- * @param fd The file descriptor of the serial port
+ * @param vna_id The program id of the vna to be used
  * @param first_point Pointer to location at which to store the first point of the output
  * @param expected_mask The expected mask value (e.g., 135)
  * @param expected_points The expected points value (e.g., 101)
  * @return EXIT_SUCCESS if header found, EXIT_FAILURE if timeout/header not found or error
  */
-int find_binary_header(int fd, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
-
-/**
- * Fatal error handling. 
- * 
- * Calls close_and_reset_all before allowing the program to exit normally.
- * 
- * @param sig The signal number
- */
-void fatal_error_signal(int sig);
+int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points);
 
 //------------------------
 // SCAN LOGIC
@@ -84,7 +67,7 @@ void fatal_error_signal(int sig);
 /**
  * Struct and functions used for shared buffer and concurrency variables
  */
-typedef struct BoundedBuffer {
+struct bounded_buffer {
     struct datapoint_nanoVNA_H **buffer;
     int count;
     int in;
@@ -93,12 +76,17 @@ typedef struct BoundedBuffer {
     pthread_cond_t take_cond;
     pthread_cond_t add_cond;
     pthread_mutex_t lock;
-} BoundedBuffer;
+};
 
-int create_bounded_buffer(BoundedBuffer *bb);
-void destroy_bounded_buffer(BoundedBuffer *buffer);
-void add_buff(BoundedBuffer *buffer, struct datapoint_nanoVNA_H *data);
-struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
+int create_bounded_buffer(struct bounded_buffer  *bb);
+void destroy_bounded_buffer(struct bounded_buffer  *buffer);
+void add_buff(struct bounded_buffer  *buffer, struct datapoint_nanoVNA_H *data);
+struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer  *buffer);
+
+/**
+ * 
+ */
+struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -111,23 +99,20 @@ struct datapoint_nanoVNA_H* take_buff(BoundedBuffer *buffer);
  */
 struct scan_producer_args {
     int vna_id;
-    int serial_port;
     int nbr_scans;
     int start;
     int stop;
     int nbr_sweeps; 
-    BoundedBuffer *bfr;
+    struct bounded_buffer  *bfr;
 };
 void* scan_producer_num(void *arguments);
 
 struct scan_timer_args {
     int time_to_wait;
-    BoundedBuffer *b;
+    struct bounded_buffer  *b;
 };
 void* scan_producer_time(void *arguments);
 void* scan_timer(void* arguments);
-
-struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
 
 /**
  * A thread function to print scans from buffer
@@ -138,10 +123,11 @@ struct datapoint_nanoVNA_H* pull_scan(int port, int vnaID, int start, int stop);
  * @param args pointer to struct scan_consumer_args
  */
 struct scan_consumer_args {
-    BoundedBuffer *bfr;
+    struct bounded_buffer  *bfr;
     FILE *touchstone_file;
     char *id_string;
     char *label;
+    bool verbose;
 };
 void* scan_consumer(void *args);
 
@@ -161,12 +147,11 @@ void* scan_consumer(void *args);
  * @param stop Stopping frequency in Hz
  * @param nbr_sweeps Number of frequency sweeps to perform
  * @param pps Number of points per scan
- * @param ports Array of serial port paths (e.g., ["/dev/ttyACM0", "/dev/ttyACM1"])
  */
 typedef enum {
     NUM_SWEEPS,
     TIME
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char **ports, const char *user_label);
+void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char *user_label);
 
 #endif
