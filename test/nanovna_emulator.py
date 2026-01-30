@@ -83,12 +83,14 @@ class NanoVNAEmulator:
     def handle_info_command(self):
         """Handle 'info' command - returns device info"""
         info = (
-            "NanoVNA-H\r\n"
-            "2-4GHz 4inch\r\n"
-            "Board: NANOVNA_STM32_F303\r\n"
-            "2019-2020 Copyright @edy555\r\n"
-            "Licensed under GPL. See: https://github.com/ttrftech/NanoVNA\r\n"
-            "ch> "
+            "Board: NanoVNA-H\r\n"
+            "2019-2022 Copyright NanoVNA.com\r\n"
+            "based on  @DiSlord @edy555 ... source\r\n"
+            "Licensed under GPL.\r\n"
+            "Version: 1.2.14 [p:101, IF:12k, ADC:192k, Lcd:320x240]\r\n"
+            "Build Time: Aug 31 2022 - 13:23:46\r\n"
+            "Architecture: ARMv6-M Core Variant: Cortex-M0\r\n"
+            "Platform: STM32F072xB Entry Level Medium Density devices\r\n"
         )
         self.ser.write(info.encode('ascii'))
         self.ser.flush()

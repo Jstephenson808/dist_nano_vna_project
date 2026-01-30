@@ -63,8 +63,6 @@ int nbr_scans;
 int sweeps;
 SweepMode sweep_mode;
 int pps;
-extern int num_vnas;
-extern const char **ports;
 
 void help() {
     char* tok = strtok(NULL, " \n");
@@ -78,15 +76,13 @@ void help() {
     set: sets a parameter to a new value\n\
     vna: executes specified vna command (see 'help vna' for details)\n"
         );
-    }
-    else if (strcmp(tok,"scan") == 0) {
+    } else if (strcmp(tok,"scan") == 0) {
         printf("\
     Starts a scan with current settings. Options:\n\
     scan sweeps - runs a certain number of sweeps (default)  \n\
     scan time - runs sweeps continuosly until specified time elapsed\n"
         );
-    }
-    else if (strcmp(tok,"set") == 0) {
+    } else if (strcmp(tok,"set") == 0) {
         printf("\
     Sets a parameter to a new value.\n\
     In the terminal, enter: set [parameter] [value]\n\
@@ -97,11 +93,9 @@ void help() {
         sweeps - number of sweeps to perform\n\
         points - number of points per scan\n\
     For example: set start 100000000\n");
-    }
-    else if (strcmp(tok,"list") == 0) {
+    } else if (strcmp(tok,"list") == 0) {
         printf("Lists the current settings used for the scan.\n");
-    }
-    else if (strcmp(tok,"vna") == 0) {
+    } else if (strcmp(tok,"vna") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             printf("\
@@ -110,45 +104,57 @@ void help() {
         vna add <port> - connects to the specified vna.\n\
         vna remove <port> - disconnects the specified vna.\n\
         vna list - lists connected VNAs and searches /dev directory\n\
-        for devices of the format ttyACM*\n");
-        }
-        else if (strcmp(tok,"add") == 0) {
+        for devices of the format ttyACM*\n\
+        vna ping - pings all connected VNAs and checks for a response\n\
+        vna id - prints board and version of all connected VNAs\n\
+        vna reset - restarts all vnas, closing connections\n");
+        } else if (strcmp(tok,"add") == 0) {
             printf("\
     Attempts to connect to the specified VNA device, first checking\n\
     that it is reachable and that it represents a NanoVNA-H device.\n\
+    If no port name is given, attempts to connect to any USB-serial\n\
+    device connected to your device and check if it is a NanoVNA-H\n\
     Usage example:\n\
         vna add /dev/ttyACM0\n");
-        }
-        else if (strcmp(tok,"remove") == 0) {
+        } else if (strcmp(tok,"remove") == 0) {
             printf("\
     Attempts to disconnect the specified VNA device, if it can\n\
     be found in the open connections.\n\
     Usage example:\n\
         vna remove /dev/ttyACM0\n");
-        }
-        else if (strcmp(tok,"list") == 0) {
+        } else if (strcmp(tok,"list") == 0) {
             printf("\
     Lists connected VNAs and searches /dev directory for unlisted\n\
     files of the format ttyACM*, which are then listed.\n\
     Usage example:\n\
         vna list\n");
-        }
-        else {
+        } else if (strcmp(tok,"ping") == 0) {
+            printf("\
+    Pings all connected VNAs and prints 'pong' for those who respond\n\
+    Specifies those who do not respond.\n");
+        } else if (strcmp(tok,"id") == 0) {
+            printf("\
+    Prints the board and firmware version of every connected VNA\n\
+    in the format:\n\
+        <num>. <serial_port> <board> version <version>\n");
+        } else if (strcmp(tok,"reset") == 0) {
+            printf("\
+    Sends the rest command to every VNA and closes their connection\n\
+    to this program.\n");
+        } else {
             printf("\
     command not recognised. vna subcommands:\n\
         vna add\n\
         vna list\n\
     see 'help vna' for more.\n");
         }
-    }
-    else if (strcmp(tok,"help") == 0) {
+    } else if (strcmp(tok,"help") == 0) {
         printf("\
     prints a user guide for the specified command,\n\
     or a list of all available commands.\n\
     Usage example:\n\
         help help\n");
-    }
-    else {
+    } else {
         printf("Usage: help [command]\nFor list of possible commands type 'help'.\n");
     }
 }
@@ -159,11 +165,11 @@ void scan() {
 
     if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports, interactive_label);
+        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
     }
     else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(num_vnas, nbr_scans, start, stop, sweep_mode, sweeps, pps, ports, interactive_label);
+        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
     }
     else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
@@ -300,14 +306,12 @@ void list() {
         Number of scans: %d\n\
         Number of sweeps: %d\n\
         Points per scan: %d\n\
-        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, num_vnas);
+        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, get_vna_count());
 }
 
 
 void list_vnas() {
-    for (int i = 0; i < num_vnas; i++) {
-        printf("    %d. %s\n", i+1, ports[i]);
-    }
+    print_vnas();
     char* new_paths[MAXIMUM_VNA_PORTS];
     int new = find_vnas(new_paths,"/dev");
     if (new > 0) {
@@ -332,7 +336,9 @@ void vna_commands() {
     if (strcmp(tok,"add") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
-            fprintf(stderr, "please provide an address\n");
+            printf("Attempting to add all found vnas:\n");
+            int added = add_all_vnas();
+            printf("    %d VNAs successfully added\n",added);
             return;
         }
         int err = add_vna(tok);
@@ -354,22 +360,25 @@ void vna_commands() {
             fprintf(stderr, "Serial device is not a NanoVNA-H\n");
             break;
         }
-    }
-    else if (strcmp(tok,"remove") == 0) {
+    } else if (strcmp(tok,"remove") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             fprintf(stderr, "please provide an address\n");
             return;
         }
-        if (remove_vna(tok) != EXIT_SUCCESS) {
+        if (remove_vna_name(tok) != EXIT_SUCCESS) {
             fprintf(stderr,"could not remove VNA %s\n",tok);
             return;
         }
-    }
-    else if (strcmp(tok,"list") == 0) {
+    } else if (strcmp(tok,"list") == 0) {
         list_vnas();
-    }
-    else {
+    } else if (strcmp(tok,"ping") == 0) {
+        vna_ping();
+    } else if (strcmp(tok,"id") == 0) {
+        vna_id();
+    } else if (strcmp(tok,"reset") == 0) {
+        vna_reset();
+    } else {
         printf("Usage: vna <add/list> [name]\nSee 'help scan' for more info.\n");
     }
 }
@@ -415,8 +424,7 @@ void initialise_settings() {
     sweep_mode = NUM_SWEEPS;
     pps = 101;
 
-    //const char* default_port = "/dev/ttyACM0";
-    initialise_port_array(NULL);
+    initialise_port_array();
 }
 
 #ifndef TESTSUITE

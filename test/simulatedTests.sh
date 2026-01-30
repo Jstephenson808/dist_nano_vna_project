@@ -22,3 +22,5 @@ timeout 120s ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.
 
 chmod +x TestVnaCommunication
 timeout 120s ./TestVnaCommunication /tmp/vna0_slave /tmp/vna1_slave 
+#gdb -ex 'run /tmp/vna0_slave /tmp/vna1_slave' ./TestVnaCommunication
+
