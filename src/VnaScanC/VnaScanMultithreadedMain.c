@@ -92,9 +92,8 @@ int main(int argc, char *argv[]) {
 
     // connect VNAs
     initialise_port_array();
-    for (int i = 0; i < num_ports_given; i++) {
+    for (int i = 0; i < num_ports_given; i++)
         add_vna(ports[i]);
-    }
 
     // call a scan
     const char *user_label = "ManualRun";

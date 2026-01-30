@@ -35,12 +35,10 @@ void open_test_ports() {
 }
 
 void close_test_ports() {
-    for (int i = 0; i < total_vnas; i++) {
+    for (int i = 0; i < total_vnas; i++)
         tcflush(vna_fds[i],TCIOFLUSH);
-    }
-    if (vna_names) {
+    if (vna_names)
         teardown_port_array();
-    }
 }
 
 void setUp(void) {
@@ -57,7 +55,8 @@ void tearDown(void) {
  * serial settings
  */
 void test_configure_serial_settings_correct() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
     
     // change port settings to something random
@@ -66,7 +65,8 @@ void test_configure_serial_settings_correct() {
     // restore
 }
 void test_restore_serial_settings_correct() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     TEST_IGNORE_MESSAGE("No idea how to compare huge termios structs");
 
     // change port settings to something random
@@ -76,9 +76,8 @@ void test_restore_serial_settings_correct() {
 
 void test_open_serial_mac_fallback_success(void) {
     #ifdef __APPLE__
-        if (!vna_mocked) {
+        if (!vna_mocked)
             TEST_IGNORE_MESSAGE("Cannot test fallback without physical device connected");
-        }
 
         // Using a path that dooesn't exist on Mac
         const char *fake_linux_port = "/dev/ttyACM_FAKE";
@@ -108,7 +107,8 @@ void test_open_serial_fails_gracefully_on_bad_path(void) {
 }
 
 void test_write_command() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
 
     open_test_ports();
     int vna_num = 0;
@@ -132,7 +132,8 @@ void test_write_command() {
  * read_exact
  */
 void test_read_exact_reads_one_byte() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
     int vna_num = 0;
     write_command(vna_num,"info\r");
@@ -144,7 +145,8 @@ void test_read_exact_reads_one_byte() {
     TEST_ASSERT_EQUAL_INT(1,bytes_read);
 }
 void test_read_exact_reads_ten_bytes() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
     int vna_num = 0;
     write_command(vna_num,"info\r");
@@ -161,7 +163,8 @@ void test_read_exact_reads_ten_bytes() {
  * test_vna
  */
 void test_test_vna_success() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
 
     int vna_num = 0;
@@ -213,13 +216,15 @@ void test_in_vna_list_empty() {
  * add_vna
  */
 void test_add_vna_adds() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
 
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, add_vna(mock_ports[0]));
     TEST_ASSERT_EQUAL_STRING(mock_ports[0],vna_names[0]);
 }
 void test_add_vna_fails_max_vnas() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     
     total_vnas = MAXIMUM_VNA_PORTS;
     TEST_ASSERT_EQUAL_INT(1,add_vna(mock_ports[0]));
@@ -227,19 +232,22 @@ void test_add_vna_fails_max_vnas() {
     total_vnas = 0;
 }
 void test_add_vna_fails_max_path_length() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
 
     char* long_path = "12345678912345678912345678";
     TEST_ASSERT_EQUAL_INT(2,add_vna(long_path));
 }
 void test_add_vna_fails_not_a_file() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
 
     char* fake_file = "/not_a_real_file_name";
     TEST_ASSERT_EQUAL_INT(-1,add_vna(fake_file));
 }
 void test_add_vna_fails_already_connected() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
 
     TEST_ASSERT_EQUAL_INT(3,add_vna(mock_ports[0]));
@@ -252,13 +260,15 @@ void test_add_vna_fails_not_a_nanovna() {
  * remove_vna_name
  */
 void test_remove_vna_name_removes() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)   
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
 
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,remove_vna_name(mock_ports[0]));
 }
 void test_remove_vna_name_no_such_connection() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
 
     TEST_ASSERT_EQUAL_INT(EXIT_FAILURE,remove_vna_name("fake_port_name"));
@@ -292,7 +302,8 @@ void test_find_vnas_finds_zero() {
 // initialise_port_array
 
 void test_teardown_port_array_targets() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
     open_test_ports();
 
     TEST_ASSERT_NOT_EQUAL_INT(0,total_vnas);

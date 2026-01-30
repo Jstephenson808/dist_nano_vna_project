@@ -118,9 +118,8 @@ void add_buff(struct bounded_buffer *buffer, struct datapoint_nanoVNA_H *data) {
 struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer) {
     pthread_mutex_lock(&buffer->lock);
     while (buffer->count == 0) {
-        if (buffer->complete >= vna_count) {
+        if (buffer->complete >= vna_count)
             return NULL;
-        }
         pthread_cond_wait(&buffer->add_cond, &buffer->lock);
     }
     struct datapoint_nanoVNA_H *data = buffer->buffer[buffer->out];
@@ -209,7 +208,8 @@ void* scan_producer_num(void *arguments) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->vna_id,
                                                         current,current + step*(points_per_scan-1));
             // add to buffer
-            if (data) {add_buff(args->bfr,data);}
+            if (data)
+                add_buff(args->bfr,data);
 
             current += step*points_per_scan;
         }
@@ -235,7 +235,8 @@ void* scan_producer_time(void *arguments) {
             struct datapoint_nanoVNA_H *data = pull_scan(args->vna_id,
                                                         current,current + step);
             // add to buffer
-            if (data) {add_buff(args->bfr,data);}
+            if (data)
+                add_buff(args->bfr,data);
 
             // finish loop
             total_scans--;

@@ -22,9 +22,8 @@ void setUp(void) {
                 vna_count++;
             }
         }
-        for (int i = 0; i < vna_count; i++) {
+        for (int i = 0; i < vna_count; i++)
             tcflush(vna_fds[i],TCIOFLUSH);
-        }
     } else {
         /* tell VnaScanMultithreaded.c we have 1 vna for buffer functions */
         vna_count = 1;

@@ -394,9 +394,18 @@ int initialise_port_array() {
     vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
     if (!vna_names || !vna_fds || !vna_initial_settings) {
         fprintf(stderr,"failed to allocate memory for port arrays\n");
-        if (vna_names) {free(vna_names);vna_names=NULL;}
-        if (vna_fds) {free(vna_fds);vna_fds=NULL;}
-        if (vna_initial_settings) {free(vna_initial_settings);vna_initial_settings=NULL;}
+        if (vna_names) {
+            free(vna_names);
+            vna_names=NULL;
+        }
+        if (vna_fds) {
+            free(vna_fds);
+            vna_fds=NULL;
+        }
+        if (vna_initial_settings) {
+            free(vna_initial_settings);
+            vna_initial_settings=NULL;
+        }
         return EXIT_FAILURE;
     }
     total_vnas = 0;
