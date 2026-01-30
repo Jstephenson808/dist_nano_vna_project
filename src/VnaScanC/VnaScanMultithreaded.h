@@ -9,22 +9,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stdatomic.h>
+#include <signal.h>
+#include <errno.h>
 #include <math.h>
 #include <time.h>
-#include <stdatomic.h>
 
-#include <fcntl.h>
-#include <errno.h>
-#include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
 #include <pthread.h>
 #include <sys/time.h>
 
 #define MASK 135 // mask passed to VNAs, defining how to format output
 #define N 100 // size of bounded buffer
+#define MAX_ONGOING_SCANS 5
 
 /**
  * Declaring structs for data points
@@ -73,9 +74,9 @@ struct bounded_buffer {
     int in;
     int out;
     atomic_int complete;
+    pthread_mutex_t lock;
     pthread_cond_t take_cond;
     pthread_cond_t add_cond;
-    pthread_mutex_t lock;
 };
 
 int create_bounded_buffer(struct bounded_buffer  *bb);
@@ -98,11 +99,12 @@ struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop);
  * @param args pointer to scan_producer_args struct used to pass arguments into this function
  */
 struct scan_producer_args {
+    int scan_id;
     int vna_id;
     int nbr_scans;
     int start;
     int stop;
-    int nbr_sweeps; 
+    int nbr_sweeps;
     struct bounded_buffer  *bfr;
 };
 void* scan_producer_num(void *arguments);
@@ -113,6 +115,24 @@ struct scan_timer_args {
 };
 void* scan_producer_time(void *arguments);
 void* scan_timer(void* arguments);
+
+struct sweep_producer_args {
+    int scan_id;
+    int vna_id;
+    int nbr_scans;
+    int start;
+    int stop;
+    bool* stop_flag;
+    struct bounded_buffer *bfr;
+};
+void* sweep_producer(void *arguments);
+
+struct sweep_stopper_args {
+    pthread_mutex_t lock;
+    pthread_cond_t take_cond;
+    struct bounded_buffer *b;
+};
+void sweep_stopper(void* arguments);
 
 /**
  * A thread function to print scans from buffer
@@ -127,6 +147,7 @@ struct scan_consumer_args {
     FILE *touchstone_file;
     char *id_string;
     char *label;
+    bool verbose;
     bool verbose;
 };
 void* scan_consumer(void *args);
@@ -150,7 +171,8 @@ void* scan_consumer(void *args);
  */
 typedef enum {
     NUM_SWEEPS,
-    TIME
+    TIME,
+    ONGOING
 } SweepMode;
 void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char *user_label);
 
