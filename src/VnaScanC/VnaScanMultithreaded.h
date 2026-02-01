@@ -73,13 +73,14 @@ struct bounded_buffer {
     int count;
     int in;
     int out;
+    int pps;
     atomic_int complete;
     pthread_mutex_t lock;
     pthread_cond_t take_cond;
     pthread_cond_t add_cond;
 };
 
-int create_bounded_buffer(struct bounded_buffer  *bb);
+int create_bounded_buffer(struct bounded_buffer  *bb, int pps);
 void destroy_bounded_buffer(struct bounded_buffer  *buffer);
 void add_buff(struct bounded_buffer  *buffer, struct datapoint_nanoVNA_H *data);
 struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer  *buffer);
@@ -87,7 +88,7 @@ struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer  *buffer);
 /**
  * 
  */
-struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop);
+struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps);
 
 /**
  * A thread function to take scans from a NanoVNA onto buffer
@@ -113,7 +114,6 @@ struct scan_timer_args {
     int time_to_wait;
     struct bounded_buffer  *b;
 };
-void* scan_producer_time(void *arguments);
 void* scan_timer(void* arguments);
 
 struct sweep_producer_args {
@@ -148,7 +148,7 @@ struct scan_consumer_args {
     char *id_string;
     char *label;
     bool verbose;
-    bool verbose;
+    struct timeval program_start_time;
 };
 void* scan_consumer(void *args);
 
@@ -174,6 +174,7 @@ typedef enum {
     TIME,
     ONGOING
 } SweepMode;
-void run_multithreaded_scan(int num_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char *user_label);
+int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label);
+int destroy_scan(int scan_id);
 
 #endif

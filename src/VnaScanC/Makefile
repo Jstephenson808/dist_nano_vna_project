@@ -54,6 +54,9 @@ TestVnaCommunication:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${COMMS_TEST_SRC_FILES} -o ${COMMS_TEST_NAME} ${MULTI_LINK}
 	- ./${COMMS_TEST_NAME}
 
+DebugVnaScanMultithreaded:
+	$(CC) $(CFLAGS) $(MULTI_MAIN_SRC_FILES) -o ${MULTI_NAME} -g ${MULTI_LINK}
+
 DebugTestVnaScanMultithreaded:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${MULTI_TEST_SRC_FILES} -o ${MULTI_TEST_NAME} -g ${MULTI_LINK}
 

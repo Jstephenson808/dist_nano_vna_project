@@ -45,6 +45,9 @@ int main(int argc, char *argv[]) {
         else if (strcmp("-t",argv[4]) == 0) {
             sweep_mode = TIME;
         }
+        else if (strcmp("-o",argv[4]) == 0) {
+            sweep_mode = ONGOING;
+        }
         else {
             fprintf(stderr, "Error: sweep mode must be either '-s' (number of sweeps) or '-t' (time)\n");
             return EXIT_FAILURE;
@@ -92,12 +95,16 @@ int main(int argc, char *argv[]) {
 
     // connect VNAs
     initialise_port_array();
-    for (int i = 0; i < num_ports_given; i++)
-        add_vna(ports[i]);
+    for (int i = 0; i < num_ports_given; i++) {
+        if (add_vna(ports[i]) != 0)
+            fprintf(stderr, "couldn't add vna \n");
+    }
 
     // call a scan
     const char *user_label = "ManualRun";
-    run_multithreaded_scan(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
+    int id = start_sweep(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
+    sleep(5);
+    destroy_scan(id);
 
     // disconnect VNAs
     teardown_port_array();
