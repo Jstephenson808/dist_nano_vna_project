@@ -63,6 +63,7 @@ int nbr_scans;
 int sweeps;
 SweepMode sweep_mode;
 int pps;
+bool verbose;
 
 void help() {
     char* tok = strtok(NULL, " \n");
@@ -92,6 +93,7 @@ void help() {
         scans - number of scans to compute\n\
         sweeps - number of sweeps to perform\n\
         points - number of points per scan\n\
+        verbose - if readings should be printed to stdout\n\
     For example: set start 100000000\n");
     } else if (strcmp(tok,"list") == 0) {
         printf("Lists the current settings used for the scan.\n");
@@ -293,8 +295,23 @@ void set() {
 
         pps = val;
     }
+    else if (strcmp(tok, "verbose") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for verbosity.\n");
+            return;
+        }
+        if (strcmp(tok, "true") == 0) {
+            verbose = true;
+        } else if (strcmp(tok, "false") == 0) {
+            verbose = false;
+        } else {
+            printf("ERROR: verbose must be 'true' or 'false'\n");
+            return;
+        }
+    }
     else {
-        printf("Parameter not recognised. Available parameters: start, stop, scans, sweeps, points\n");
+        printf("Parameter not recognised. Available parameters: start, stop, scans, sweeps, points, verbose\n");
     }
 }
 
@@ -306,7 +323,9 @@ void list() {
         Number of scans: %d\n\
         Number of sweeps: %d\n\
         Points per scan: %d\n\
-        Number of VNAs: %d\n", start, stop, nbr_scans, sweeps, pps, get_vna_count());
+        Number of VNAs: %d\n\
+        Verbose: %s\n", 
+        start, stop, nbr_scans, sweeps, pps, get_vna_count(), verbose ? "true" : "false");
 }
 
 
@@ -423,6 +442,7 @@ void initialise_settings() {
     sweeps = 1;
     sweep_mode = NUM_SWEEPS;
     pps = 101;
+    verbose = true;
 
     initialise_port_array();
 }

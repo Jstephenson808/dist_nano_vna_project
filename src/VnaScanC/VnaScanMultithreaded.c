@@ -464,6 +464,7 @@ struct run_sweep_args {
     int sweeps;
     int pps;
     const char *user_label;
+    bool verbose;
 };
 void* run_sweep(void* arguments){
 
@@ -528,7 +529,7 @@ void* run_sweep(void* arguments){
         touchstone_file,
         id_string,
         (char*)args->user_label,
-        true,
+        args->verbose,
         program_start_time
     };
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
@@ -572,7 +573,7 @@ void* run_sweep(void* arguments){
     return NULL;
 }
 
-int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label) {
+int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose) {
 
     if (nbr_vnas < 1) {
         fprintf(stderr, "No VNAs!\n");
@@ -599,6 +600,7 @@ int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode swee
     args->sweeps = sweeps;
     args->pps = pps;
     args->user_label = user_label;
+    args->verbose = verbose;
 
     pthread_mutex_lock(&scan_state_lock);
     pthread_create(&scan_threads[scan_id],NULL,&run_sweep,args);

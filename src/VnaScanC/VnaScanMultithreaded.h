@@ -242,7 +242,8 @@ typedef enum {
 /**
  * Orchestrates creating a new run_sweep thread and returns an ID for that thread.
  * 
- * Calls initialise_scan to 
+ * Calls initialise_scan to obtain a scan_id, then creates a run_sweep thead using that
+ * id to execute the sweep. Does not join that thread, it must be joined with stop_sweep.
  * 
  * @param nbr_vnas Number of VNAs to scan with
  * @param nbr_scans Total number of scans per VNA, determining number of data points to collect (101 dp per scan)
@@ -259,7 +260,7 @@ typedef enum {
  * 
  * @return scan_id - used to reference this scan thread etc. again (e.g. when closing it)
  */
-int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label);
+int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose);
 
 /**
  * Signals specified scan to end, waits for it to finish and joins the thread.

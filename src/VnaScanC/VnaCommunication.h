@@ -31,6 +31,9 @@ void fatal_error_signal(int sig);
 /**
  * Opens a serial port and configures its settings
  * 
+ * On apple devices, attempts to connect a usbmodem device
+ * if /dev/ttyACM* doens't work.
+ * 
  * @param port The device path (e.g., "/dev/ttyACM0")
  * @param init_tty Memory location to store the initial settings of the port
  * @return File descriptor on success, -1 on failure
