@@ -5,9 +5,30 @@
 // Scan state global variables (access with mutex)
 //---------------------------------------------------
 
+/**
+ * current number of ongoing scans
+ */
 int ongoing_scans = 0;
+
+/**
+ * Array of scan states. Indexed by scan_id.
+ * 
+ * Values:
+ * -1 = unused
+ * 0  = starting or finishing
+ * >0 = number of scan threads still to finish (NUM_SCANS sweeps)
+ *      scan active, value = number of VNAs (TIME / ONGOING sweeps)
+ */
 int* scan_states = NULL;
+
+/**
+ * Array of pointers to main threads of scans. Indexed by scan_id
+ */
 pthread_t* scan_threads = NULL;
+
+/**
+ * Mutex to make state variables thread safe.
+ */
 pthread_mutex_t scan_state_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //----------------------------------------
