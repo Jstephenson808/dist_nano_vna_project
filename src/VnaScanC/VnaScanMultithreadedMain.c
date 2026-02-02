@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 
     // call a scan
     const char *user_label = "ManualRun";
-    int id = start_sweep(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
+    int id = start_sweep(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label,true);
     sleep(5);
     stop_sweep(id);
 
