@@ -225,7 +225,7 @@ void* scan_producer_num(void *arguments) {
 
 void* sweep_producer(void *arguments) {
 
-    struct sweep_producer_args *args = (struct sweep_producer_args*)arguments;
+    struct scan_producer_args *args = (struct scan_producer_args*)arguments;
     int pps = args->bfr->pps;
 
     while (scan_states[args->scan_id] > 0) {
@@ -457,6 +457,7 @@ void* run_sweep(void* arguments){
     struct scan_producer_args producer_args[args->nbr_vnas];
     pthread_t producers[args->nbr_vnas];
     for (int i = 0; i < args->nbr_vnas; i++) {
+        producer_args[i].scan_id = args->scan_id;
         producer_args[i].vna_id = i;
         producer_args[i].nbr_scans = args->nbr_scans;
         producer_args[i].start = args->start;
@@ -465,9 +466,9 @@ void* run_sweep(void* arguments){
         producer_args[i].bfr = bb;
 
         if (args->sweep_mode == NUM_SWEEPS) {
-            error = pthread_create(&producers[i], NULL, &scan_producer_num, &arguments[i]);
+            error = pthread_create(&producers[i], NULL, &scan_producer_num, &producer_args[i]);
         } else {
-            error = pthread_create(&producers[i], NULL, &sweep_producer, &arguments[i]);
+            error = pthread_create(&producers[i], NULL, &sweep_producer, &producer_args[i]);
         }
 
         if(error != 0){

@@ -94,7 +94,8 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // connect VNAs
-    initialise_port_array();
+    if (initialise_port_array() != 0)
+        fprintf(stderr, "failed to init port array");
     for (int i = 0; i < num_ports_given; i++) {
         if (add_vna(ports[i]) != 0)
             fprintf(stderr, "couldn't add vna \n");

@@ -116,15 +116,6 @@ struct scan_timer_args {
 };
 void* scan_timer(void* arguments);
 
-struct sweep_producer_args {
-    int scan_id;
-    int vna_id;
-    int nbr_scans;
-    int start;
-    int stop;
-    bool* stop_flag;
-    struct bounded_buffer *bfr;
-};
 void* sweep_producer(void *arguments);
 
 struct sweep_stopper_args {
