@@ -27,9 +27,9 @@
 #define N 100 // size of bounded buffer
 #define MAX_ONGOING_SCANS 5
 
-//--------------------------------
+//----------------------------------------
 // Structs for data points
-//--------------------------------
+//----------------------------------------
 
 /**
  * Represents a complex number.
@@ -59,9 +59,9 @@ struct datapoint_nanoVNA_H {
     struct nanovna_raw_datapoint *point;      // Array of measurement datapoints
 };
 
-//----------------------------
+//----------------------------------------
 // Bounded Buffer Logic
-//----------------------------
+//----------------------------------------
 
 /**
  * Struct and functions used for shared buffer and concurrency variables
@@ -110,9 +110,9 @@ void add_buff(struct bounded_buffer *buffer, struct datapoint_nanoVNA_H *data);
  */
 struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer);
 
-//--------------------------------
+//----------------------------------------
 // Pulling Data Logic
-//--------------------------------
+//----------------------------------------
 
 /**
  * Finds the binary header in the serial stream

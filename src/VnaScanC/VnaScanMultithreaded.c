@@ -10,9 +10,9 @@ int* scan_states = NULL;
 pthread_t* scan_threads = NULL;
 pthread_mutex_t scan_state_lock = PTHREAD_MUTEX_INITIALIZER;
 
-//------------------------
+//----------------------------------------
 // Bounded Buffer Logic
-//------------------------
+//----------------------------------------
 
 int create_bounded_buffer(struct bounded_buffer *bb, int pps) {
     struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*N);
@@ -62,9 +62,9 @@ struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer) {
     return data;
 }
 
-//--------------------------------
+//----------------------------------------
 // Pulling Data Logic
-//--------------------------------
+//----------------------------------------
 
 int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
@@ -316,9 +316,9 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
-//------------------------
+//----------------------------------------
 // Touchstone Logic
-//------------------------
+//----------------------------------------
 
 FILE * create_touchstone_file(struct tm *tm_info) {
     // Create Touchstone file
@@ -338,9 +338,9 @@ FILE * create_touchstone_file(struct tm *tm_info) {
     return touchstone_file;
 }
 
-//------------------------
+//----------------------------------------
 // Scan State Logic
-//------------------------
+//----------------------------------------
 
 /**
  * Initialises scan state arrays if they are not already initialised.
@@ -429,9 +429,9 @@ static void destroy_scan(int scan_id) {
     pthread_mutex_unlock(&scan_state_lock);
 }
 
-//------------------------
+//----------------------------------------
 // Sweep Logic
-//------------------------
+//----------------------------------------
 
 struct run_sweep_args {
     int scan_id;
