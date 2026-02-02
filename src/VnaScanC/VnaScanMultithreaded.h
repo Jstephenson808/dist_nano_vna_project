@@ -212,11 +212,9 @@ struct scan_consumer_args {
 };
 void* scan_consumer(void *args);
 
-/**
- * -----------------------------------------------
- * Touchstone Files
- * -----------------------------------------------
- */
+//----------------------------------------
+// Touchstone Files
+//----------------------------------------
 
 /**
  * Opens a touchstone file with name format "vna_scan_at_%Y-%m-%d_%H-%M-%S.s2p"
