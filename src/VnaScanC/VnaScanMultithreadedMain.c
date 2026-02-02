@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
     const char *user_label = "ManualRun";
     int id = start_sweep(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
     sleep(5);
-    destroy_scan(id);
+    stop_sweep(id);
 
     // disconnect VNAs
     teardown_port_array();
