@@ -265,11 +265,11 @@ int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode swee
 
 /**
  * Signals specified scan to end, waits for it to finish and joins the thread.
- * Then frees/resets supporting data structures.
+ * Then resets supporting data structures.
  * 
  * @param scan_id The ID used to reference this scan thread, returned by start_sweep
  * @return EXIT_SUCCESS on success, error code on failure.
  */
-int destroy_scan(int scan_id);
+int stop_sweep(int scan_id);
 
 #endif

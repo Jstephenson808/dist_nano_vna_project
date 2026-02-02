@@ -1,9 +1,10 @@
 #include "VnaScanMultithreaded.h"
 #include <glob.h>
 
-/**
- * Declaring global variables
- */
+//---------------------------------------------------
+// Scan state global variables (access with mutex)
+//---------------------------------------------------
+
 int ongoing_scans = 0;
 int* scan_states = NULL;
 pthread_t* scan_threads = NULL;
@@ -341,7 +342,12 @@ FILE * create_touchstone_file(struct tm *tm_info) {
 // Scan State Logic
 //------------------------
 
-int initialise_scan_state() {
+/**
+ * Initialises scan state arrays if they are not already initialised.
+ * 
+ * @return EXIT_SUCCESS on success, error code on failure
+ */
+static int initialise_scan_state() {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
         ongoing_scans = 0;
@@ -367,7 +373,17 @@ int initialise_scan_state() {
     return EXIT_SUCCESS;
 }
 
-int initialise_scan() {
+/**
+ * Allocates and initialises tracking state for a scan
+ * 
+ * If scan state arrays have not been initialised, calls initialise_scan_state.
+ * Looks for unused space in scan state arrays (marked w/ -1), and if
+ * it finds any initialises it to 0 and returns its location, and increments ongoing_scans.
+ * 
+ * @return scan_id, location of scan in scan tracking state structures.
+ * If negative, failed to allocate space for scan.
+ */
+static int initialise_scan() {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
         pthread_mutex_unlock(&scan_state_lock);
@@ -401,29 +417,16 @@ int initialise_scan() {
     return scan_id;
 }
 
-int destroy_scan(int scan_id) {
-    pthread_mutex_lock(&scan_state_lock);
-    if (scan_states == NULL) {
-        fprintf(stderr, "Scan array not initialised\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
-    }
-    if (scan_states[scan_id] == -1) {
-        fprintf(stderr, "Not currently scanning\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
-    }
-
-    scan_states[scan_id] = 0;
-    pthread_mutex_unlock(&scan_state_lock);
-
-    pthread_join(scan_threads[scan_id], NULL);
-
+/**
+ * Resets a finished scan's tracking state and decrements ongoing_scans.
+ * 
+ * @param scan_id location of finished scan in scan tracking state structures
+ */
+static void destroy_scan(int scan_id) {
     pthread_mutex_lock(&scan_state_lock);
     scan_states[scan_id] = -1;
     ongoing_scans--;
     pthread_mutex_unlock(&scan_state_lock);
-    return EXIT_SUCCESS;
 }
 
 //------------------------
@@ -581,4 +584,26 @@ int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode swee
     pthread_mutex_unlock(&scan_state_lock);
 
     return scan_id;
+}
+
+int stop_sweep(int scan_id) {
+    pthread_mutex_lock(&scan_state_lock);
+    if (scan_states == NULL) {
+        fprintf(stderr, "Scan array not initialised\n");
+        pthread_mutex_unlock(&scan_state_lock);
+        return -1;
+    }
+    if (scan_states[scan_id] == -1) {
+        fprintf(stderr, "Not currently scanning\n");
+        pthread_mutex_unlock(&scan_state_lock);
+        return -1;
+    }
+
+    scan_states[scan_id] = 0;
+    pthread_mutex_unlock(&scan_state_lock);
+
+    pthread_join(scan_threads[scan_id], NULL);
+    destroy_scan(scan_id);
+    
+    return EXIT_SUCCESS;
 }
