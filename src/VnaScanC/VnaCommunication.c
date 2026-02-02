@@ -168,8 +168,6 @@ ssize_t read_exact(int vna_num, uint8_t *buffer, size_t length) {
 
 #define INFO_SIZE 292
 
-#define INFO_SIZE 292
-
 int test_vna(int vna_num) {
     tcflush(vna_fds[vna_num],TCIOFLUSH);
     const char *msg = "info\r";

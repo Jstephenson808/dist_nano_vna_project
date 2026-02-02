@@ -9,6 +9,62 @@ int* scan_states = NULL;
 pthread_t* scan_threads = NULL;
 pthread_mutex_t scan_state_lock = PTHREAD_MUTEX_INITIALIZER;
 
+//------------------------
+// Bounded Buffer Logic
+//------------------------
+
+int create_bounded_buffer(struct bounded_buffer *bb, int pps) {
+    struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*N);
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate buffer memory\n");
+        return EXIT_FAILURE;
+    }
+    *bb = (struct bounded_buffer){buffer,0,0,0,pps,0,PTHREAD_MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER};
+    return EXIT_SUCCESS;
+}
+
+void destroy_bounded_buffer(struct bounded_buffer *buffer) {
+    free(buffer->buffer);
+    buffer->buffer = NULL;
+    free(buffer);
+    buffer = NULL;
+}
+
+void add_buff(struct bounded_buffer *buffer, struct datapoint_nanoVNA_H *data) {
+    pthread_mutex_lock(&buffer->lock);
+    while (buffer->count == N) {
+        pthread_cond_wait(&buffer->take_cond, &buffer->lock);
+    }
+    buffer->buffer[buffer->in] = data;
+    buffer->in = (buffer->in+1) % N;
+    buffer->count++;
+    pthread_cond_signal(&buffer->add_cond);
+    pthread_mutex_unlock(&buffer->lock);
+    return;
+}
+
+struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer) {
+    pthread_mutex_lock(&buffer->lock);
+    while (buffer->count == 0) {
+        if (buffer->complete == true) {
+            pthread_mutex_unlock(&buffer->lock);
+            return NULL;
+        }
+        pthread_cond_wait(&buffer->add_cond, &buffer->lock);
+    }
+    struct datapoint_nanoVNA_H *data = buffer->buffer[buffer->out];
+    buffer->buffer[buffer->out] = NULL;
+    buffer->out = (buffer->out + 1) % N;
+    buffer->count--;
+    pthread_cond_signal(&buffer->take_cond);
+    pthread_mutex_unlock(&buffer->lock);
+    return data;
+}
+
+//--------------------------------
+// Pulling Data Logic
+//--------------------------------
+
 int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, uint16_t expected_mask, uint16_t expected_points) {
     int max_bytes = 500;  // Maximum bytes to scan before giving up
     int dp_size = (unsigned int)sizeof(struct nanovna_raw_datapoint); // Amount of bytes that should be pulled at a time
@@ -82,59 +138,6 @@ int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, ui
     return EXIT_SUCCESS;
 }
 
-/**
- * Bounded Buffer handling functions (do not access bounded buffer otherwise)
- */
-int create_bounded_buffer(struct bounded_buffer *bb, int pps) {
-    struct datapoint_nanoVNA_H **buffer = malloc(sizeof(struct datapoint_nanoVNA_H *)*N);
-    if (!buffer) {
-        fprintf(stderr, "Failed to allocate buffer memory\n");
-        return EXIT_FAILURE;
-    }
-    *bb = (struct bounded_buffer){buffer,0,0,0,pps,0,PTHREAD_MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER};
-    return EXIT_SUCCESS;
-}
-
-void destroy_bounded_buffer(struct bounded_buffer *buffer) {
-    free(buffer->buffer);
-    buffer->buffer = NULL;
-    free(buffer);
-    buffer = NULL;
-}
-
-void add_buff(struct bounded_buffer *buffer, struct datapoint_nanoVNA_H *data) {
-    pthread_mutex_lock(&buffer->lock);
-    while (buffer->count == N) {
-        pthread_cond_wait(&buffer->take_cond, &buffer->lock);
-    }
-    buffer->buffer[buffer->in] = data;
-    buffer->in = (buffer->in+1) % N;
-    buffer->count++;
-    pthread_cond_signal(&buffer->add_cond);
-    pthread_mutex_unlock(&buffer->lock);
-    return;
-}
-
-struct datapoint_nanoVNA_H* take_buff(struct bounded_buffer *buffer) {
-    pthread_mutex_lock(&buffer->lock);
-    while (buffer->count == 0) {
-        if (buffer->complete == true) {
-            pthread_mutex_unlock(&buffer->lock);
-            return NULL;
-        pthread_cond_wait(&buffer->add_cond, &buffer->lock);
-    }
-    struct datapoint_nanoVNA_H *data = buffer->buffer[buffer->out];
-    buffer->buffer[buffer->out] = NULL;
-    buffer->out = (buffer->out + 1) % N;
-    buffer->count--;
-    pthread_cond_signal(&buffer->take_cond);
-    pthread_mutex_unlock(&buffer->lock);
-    return data;
-}
-
-/**
- * producer / consumer functions
- */
 struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps) {
     struct timeval send_time, receive_time;
     gettimeofday(&send_time, NULL);
@@ -194,7 +197,11 @@ struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps) 
     return data;
 }
 
-void* scan_producer_num(void *arguments) {
+//----------------------------------------
+// Producer/Consumer Thread Logic
+//----------------------------------------
+
+void* scan_producer(void *arguments) {
 
     struct scan_producer_args *args = (struct scan_producer_args*)arguments;
     int pps = args->bfr->pps;
@@ -251,7 +258,7 @@ void* sweep_producer(void *arguments) {
 void* scan_timer(void *arguments) { 
     struct scan_timer_args *args = (struct scan_timer_args *)arguments;
     sleep(args->time_to_wait);
-    args->b->complete = 0;
+    scan_states[args->scan_id] = 0;
     printf("---\ntimer done\n---\n");
     return NULL;
 }
@@ -308,6 +315,10 @@ void* scan_consumer(void *arguments) {
     return NULL;
 }
 
+//------------------------
+// Touchstone Logic
+//------------------------
+
 FILE * create_touchstone_file(struct tm *tm_info) {
     // Create Touchstone file
     char filename[128];
@@ -325,6 +336,10 @@ FILE * create_touchstone_file(struct tm *tm_info) {
     }
     return touchstone_file;
 }
+
+//------------------------
+// Scan State Logic
+//------------------------
 
 int initialise_scan_state() {
     pthread_mutex_lock(&scan_state_lock);
@@ -385,6 +400,7 @@ int initialise_scan() {
     pthread_mutex_unlock(&scan_state_lock);
     return scan_id;
 }
+
 int destroy_scan(int scan_id) {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
@@ -409,6 +425,10 @@ int destroy_scan(int scan_id) {
     pthread_mutex_unlock(&scan_state_lock);
     return EXIT_SUCCESS;
 }
+
+//------------------------
+// Sweep Logic
+//------------------------
 
 struct run_sweep_args {
     int scan_id;
@@ -454,6 +474,7 @@ void* run_sweep(void* arguments){
     scan_states[args->scan_id] = args->nbr_vnas;
     pthread_mutex_unlock(&scan_state_lock);
     
+
     struct scan_producer_args producer_args[args->nbr_vnas];
     pthread_t producers[args->nbr_vnas];
     for (int i = 0; i < args->nbr_vnas; i++) {
@@ -466,7 +487,7 @@ void* run_sweep(void* arguments){
         producer_args[i].bfr = bb;
 
         if (args->sweep_mode == NUM_SWEEPS) {
-            error = pthread_create(&producers[i], NULL, &scan_producer_num, &producer_args[i]);
+            error = pthread_create(&producers[i], NULL, &scan_producer, &producer_args[i]);
         } else {
             error = pthread_create(&producers[i], NULL, &sweep_producer, &producer_args[i]);
         }
