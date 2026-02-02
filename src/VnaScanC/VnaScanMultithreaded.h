@@ -228,6 +228,10 @@ void* scan_consumer(void *args);
  */
 FILE * create_touchstone_file(struct tm *tm_info);
 
+//----------------------------------------
+// Sweep Logic
+//----------------------------------------
+
 /**
  * enum for type of sweep to be used
  */
@@ -236,10 +240,6 @@ typedef enum {
     TIME,
     ONGOING
 } SweepMode;
-
-//----------------------------------------
-// Sweep Logic
-//----------------------------------------
 
 /**
  * Orchestrates creating a new run_sweep thread and returns an ID for that thread.
