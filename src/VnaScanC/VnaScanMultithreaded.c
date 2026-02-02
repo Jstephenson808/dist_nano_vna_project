@@ -450,6 +450,38 @@ static void destroy_scan(int scan_id) {
     pthread_mutex_unlock(&scan_state_lock);
 }
 
+bool is_running(int scan_id) {
+    if (scan_states == NULL || scan_id < 0 || scan_id > MAX_ONGOING_SCANS)
+        return false;
+
+    pthread_mutex_lock(&scan_state_lock);
+    bool running = scan_states[scan_id] >= 0;
+    pthread_mutex_unlock(&scan_state_lock);
+
+    return running;
+}
+
+int get_state(int scan_id, char* state_buffer) {
+    if (scan_states == NULL || scan_id < 0 || scan_id > MAX_ONGOING_SCANS)
+        return EXIT_FAILURE;
+
+    pthread_mutex_lock(&scan_state_lock);
+    int state = scan_states[scan_id];
+    pthread_mutex_unlock(&scan_state_lock);
+
+    if (state == -1) {
+        strncpy(state_buffer,"vacant",7);
+    } else if (state == 0) {
+        strncpy(state_buffer,"idle",7);
+    } else if (state > 0) {
+        strncpy(state_buffer,"busy",7);
+    } else {
+        strncpy(state_buffer,"error",7);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 //----------------------------------------
 // Sweep Logic
 //----------------------------------------

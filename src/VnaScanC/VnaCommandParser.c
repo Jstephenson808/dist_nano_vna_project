@@ -73,15 +73,18 @@ void help() {
     help: prints a list of all available commands,\n\
           or user guide for specified command\n\
     list: lists the values of the current scan parameters\n\
-    scan: starts a scan with current settings\n\
+    scan: starts a scan with current settings (see 'help scan' for details)\n\
     set: sets a parameter to a new value\n\
     vna: executes specified vna command (see 'help vna' for details)\n"
         );
     } else if (strcmp(tok,"scan") == 0) {
         printf("\
     Starts a scan with current settings. Options:\n\
-    scan sweeps - runs a certain number of sweeps (default)  \n\
-    scan time - runs sweeps continuosly until specified time elapsed\n"
+        scan ongoing - runs sweeps continuously until stop command sent\n\
+        scan sweeps - runs a certain number of sweeps (default)  \n\
+        scan time - runs sweeps continuosly until specified time elapsed\n\
+        scan stop [scan id] - stops specified sweep, or all sweeps if no scan id specified\n\
+        scan list - lists the status of all available scan IDs\n"
         );
     } else if (strcmp(tok,"set") == 0) {
         printf("\
@@ -165,15 +168,58 @@ void scan() {
     char* tok = strtok(NULL, " \n");
     const char *interactive_label = "InteractiveMode";
 
-    if (tok == NULL || (strcmp(tok,"sweeps") == 0)) {
+    if (tok == NULL || (strcmp(tok,"ongoing") == 0)) {
+        sweep_mode = ONGOING;
+        start_sweep(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label, verbose);
+    } else if (strcmp(tok,"sweeps") == 0) {
         sweep_mode = NUM_SWEEPS;
-        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
-    }
-    else if (strcmp(tok,"time") == 0) {
+        start_sweep(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label, verbose);
+    } else if (strcmp(tok,"time") == 0) {
         sweep_mode = TIME;
-        run_multithreaded_scan(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label);
-    }
-    else {
+        start_sweep(get_vna_count(), nbr_scans, start, stop, sweep_mode, sweeps, pps, interactive_label, verbose);
+    } else if (strcmp(tok, "stop") == 0) {
+        char* tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+                if (is_running(i)) {
+                    printf("Stopping sweep %d\n", i);
+                    stop_sweep(i);
+                }
+            }
+        } else {
+            if (!isValidInt(tok)) {
+                printf("ERROR: scan id must be a valid integer.\n");
+                return;
+            }
+            int scan_id = atoi(tok);
+            if (scan_id < 0 || scan_id > MAX_ONGOING_SCANS) {
+                printf("ERROR: scan id must be between 0 and %d.\n", MAX_ONGOING_SCANS);
+                return;
+            } else if (!is_running(scan_id)) {
+                printf("ERROR: scan %d is not currently running.\n", scan_id);
+                return;
+            }
+            int err = stop_sweep(scan_id);
+            if (err != EXIT_SUCCESS) {
+                fprintf(stderr, "error %d stopping scan %d.\n", err, scan_id);
+                return;
+            }
+        }
+    } else if (strcmp(tok, "list") == 0) {
+        char* status = calloc(sizeof(char),8);
+        if (!status) {
+            fprintf(stderr, "failed to allocate memory\n");
+            return;
+        }
+        for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+            int err = get_state(i,status);
+            if (err == EXIT_SUCCESS)
+                printf("    %d - %s\n", i, status);
+            else
+                printf("    error fetching %d\n", i, status);
+        }
+        free(status);
+    } else {
         printf("Usage: scan [sweep_mode]\nSee 'help scan' for more info.\n");
     }
 }
@@ -435,7 +481,7 @@ int read_command() {
     return 0;
 }
 
-void initialise_settings() {
+int initialise_settings() {
     start = 50000000;
     stop = 900000000;
     nbr_scans = 5;
@@ -444,7 +490,7 @@ void initialise_settings() {
     pps = 101;
     verbose = true;
 
-    initialise_port_array();
+    return initialise_port_array();
 }
 
 #ifndef TESTSUITE

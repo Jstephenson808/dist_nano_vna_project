@@ -227,6 +227,33 @@ void* scan_consumer(void *args);
 FILE * create_touchstone_file(struct tm *tm_info);
 
 //----------------------------------------
+// Scan State Logic
+//----------------------------------------
+
+/**
+ * Checks if a running scan is occupying a scan_id
+ * 
+ * @param scan_id ID used to reference the chosen scan thread
+ * @return true if running, false if not
+ */
+bool is_running(int scan_id);
+
+/**
+ * Provides the status of a scan id in string form.
+ * 
+ * "vacant" = -1
+ * "idle" = 0
+ * "busy" = 1+
+ * "error" = <-1
+ * 
+ * @param state_buffer a pointer to a location to store the status string. 
+ * Should have space for at least 7 characters.
+ * @param scan_id ID used to reference the chosen scan thread
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on id out of bounds
+ */
+int get_state(int scan_id, char* state_buffer);
+
+//----------------------------------------
 // Sweep Logic
 //----------------------------------------
 

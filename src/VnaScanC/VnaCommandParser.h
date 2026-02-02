@@ -9,14 +9,14 @@
 
 // maybe make a struct for the commands I'm passing around?
 
-/*
+/**
  * Handles print command
  * 
  * Exprects strtok to be set up by read_command()
  */
 void help();
 
-/*
+/**
  * Handles scan command
  *
  * Will take a strtok reading (if it exists) to determine scan mode
@@ -25,12 +25,12 @@ void help();
  */
 void scan();
 
-/*
+/**
  * Potentially needs moved to VnaCommunication?
  */
 void list_vnas();
 
-/*
+/**
  * Handles VNA connection-related commands, passing control to
  * relevant VnaCommunication method.
  * 
@@ -41,7 +41,7 @@ void list_vnas();
  */
 void vna_commands();
 
-/*
+/**
  * Reads a single command from stdin, sets up strtok and hands
  * exectution over to relevant other function.
  * 
@@ -49,10 +49,12 @@ void vna_commands();
  */
 int read_command();
 
-/*
+/**
  * Initialises all scan() arguments to their default settings,
  * and instructs VnaCommunication to initialise its VNA list.
+ * 
+ * @return EXIT_SUCCESS on success, else error code
  */
-void initialise_settings();
+int initialise_settings();
 
 #endif
