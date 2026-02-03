@@ -94,12 +94,16 @@ Or find details about a given command:
 
 ```bash
 ./VnaCommandParser
->>> help <command>
+>>> help <command> [subcommand]
 ```
 e.g.
 ```bash
 ./VnaCommandParser
 >>> help scan
+```
+```bash
+./VnaCommandParser
+>>> help vna add
 ```
 
 ### Scanner Only
