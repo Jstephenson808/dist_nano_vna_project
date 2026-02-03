@@ -42,66 +42,6 @@ void tearDown(void) {
 }
 
 /**
- * Serial functions
- */
-void test_find_binary_header_handles_random_data() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int vna_id = 0;
-    char msg_buff[100];
-    int start = 50000000;
-    int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
-    
-    write_command(vna_id,"info\r");
-    sleep(1);
-    write_command(vna_id,msg_buff);
-    sleep(1);
-
-    struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,PPS);
-    TEST_ASSERT_EQUAL_INT(0,error);
-
-    uint32_t freq;
-    int bytes_read = read_exact(vna_id,(uint8_t*)&freq,sizeof(uint8_t)*4);
-    TEST_ASSERT_EQUAL_INT(4,bytes_read);
-    TEST_ASSERT_EQUAL_INT(start+step,freq);
-}
-void test_find_binary_header_constructs_correct_first_point() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int vna_id = 0;
-    char msg_buff[100];
-    int start = 50000000;
-    int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
-    
-    write_command(vna_id,msg_buff);
-    sleep(1);
-
-    struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,PPS);
-    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
-
-    TEST_ASSERT_EQUAL_INT(start,fp.frequency);
-}
-void test_find_binary_header_fails_gracefully() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
-    int vna_id = 0;
-    char msg_buff[100];
-    int start = 50000000;
-    int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
-    
-    write_command(vna_id,msg_buff);
-    sleep(1);
-
-    struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,PPS);
-    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
-    error = find_binary_header(vna_id,&fp,MASK,PPS);
-    TEST_ASSERT_NOT_EQUAL_INT(EXIT_SUCCESS,error);
-}
-
-/**
  * Bounded Buffer create/destroy
  */
 void test_create_bounded_buffer() {
@@ -245,6 +185,66 @@ void test_take_buff_escapes_block_after_full() {
     TEST_ASSERT_EQUAL_INT(0,b->count);
     free(data);
     destroy_bounded_buffer(b);
+}
+
+/**
+ * Find Binary Header
+ */
+void test_find_binary_header_handles_random_data() {
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
+    char msg_buff[100];
+    int start = 50000000;
+    int step = 1000;
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
+    
+    write_command(vna_id,"info\r");
+    sleep(1);
+    write_command(vna_id,msg_buff);
+    sleep(1);
+
+    struct nanovna_raw_datapoint fp;
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
+    TEST_ASSERT_EQUAL_INT(0,error);
+
+    uint32_t freq;
+    int bytes_read = read_exact(vna_id,(uint8_t*)&freq,sizeof(uint8_t)*4);
+    TEST_ASSERT_EQUAL_INT(4,bytes_read);
+    TEST_ASSERT_EQUAL_INT(start+step,freq);
+}
+void test_find_binary_header_constructs_correct_first_point() {
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
+    char msg_buff[100];
+    int start = 50000000;
+    int step = 1000;
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
+    
+    write_command(vna_id,msg_buff);
+    sleep(1);
+
+    struct nanovna_raw_datapoint fp;
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
+
+    TEST_ASSERT_EQUAL_INT(start,fp.frequency);
+}
+void test_find_binary_header_fails_gracefully() {
+    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    int vna_id = 0;
+    char msg_buff[100];
+    int start = 50000000;
+    int step = 1000;
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
+    
+    write_command(vna_id,msg_buff);
+    sleep(1);
+
+    struct nanovna_raw_datapoint fp;
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
+    error = find_binary_header(vna_id,&fp,MASK,PPS);
+    TEST_ASSERT_NOT_EQUAL_INT(EXIT_SUCCESS,error);
 }
 
 /**
@@ -456,11 +456,6 @@ int main(int argc, char *argv[]) {
         vnas_mocked = argc - 1;
         mock_ports = (char **)&argv[1];
     }
-    
-    // serial tests
-    RUN_TEST(test_find_binary_header_handles_random_data);
-    RUN_TEST(test_find_binary_header_constructs_correct_first_point);
-    RUN_TEST(test_find_binary_header_fails_gracefully);
 
     // bounded buffer tests
     RUN_TEST(test_create_bounded_buffer);
@@ -471,11 +466,16 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_take_buff_cycles);
     RUN_TEST(test_take_buff_escapes_block_after_full);
 
-    // producer/consumer tests
+    // pull tests
+    RUN_TEST(test_find_binary_header_handles_random_data);
+    RUN_TEST(test_find_binary_header_constructs_correct_first_point);
+    RUN_TEST(test_find_binary_header_fails_gracefully);
     RUN_TEST(test_pull_scan_constructs_valid_data);
     RUN_TEST(test_pull_scan_takes_correct_number_points_low);
     RUN_TEST(test_pull_scan_takes_correct_number_points_high);
     RUN_TEST(test_pull_scan_nulls_malformed_data);
+
+    // producer/consumer tests
     RUN_TEST(test_scan_producer_takes_correct_points);
     RUN_TEST(test_timed_sweep_producer_takes_correct_time);
     RUN_TEST(test_consumer_constructs_valid_output);
