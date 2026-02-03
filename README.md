@@ -6,7 +6,7 @@ A data acquisition system for NanoVNA (Vector Network Analyzer) devices, enablin
 
 ## Overview
 
-This project provides a multithreaded C scanner for interfacing with NanoVNA-H devices to perform rapid RF measurements, using binary protocol communication and a producer-consumer multithreading architecture.
+This project provides a CLI app for interfacing with multiple NanoVNA-H devices to perform rapid RF measurements.
 
 ### Key Features
 
