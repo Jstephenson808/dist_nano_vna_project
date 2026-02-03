@@ -11,3 +11,4 @@ TestVnaCommunication
 test/tmp/*
 *.out
 .venv
+__pycache__
