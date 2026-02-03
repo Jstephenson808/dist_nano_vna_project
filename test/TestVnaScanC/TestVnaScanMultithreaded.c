@@ -9,10 +9,10 @@ int vnas_mocked = 0;
 char **mock_ports;
 
 /**
- * extern from VnaScanMultithreaded, for testing
- * producers and consumers
+ * externs from VnaScanMultithreaded, for testing
  */
 extern int* scan_states;
+extern pthread_t* scan_threads;
 
 /**
  * extern from VnaCommunication, purely for flushing I/O
@@ -38,6 +38,10 @@ void tearDown(void) {
     if (scan_states) {
         free(scan_states);
         scan_states = NULL;
+    }
+    if (scan_threads) {
+        free(scan_threads);
+        scan_threads = NULL;
     }
 }
 
@@ -191,7 +195,8 @@ void test_take_buff_escapes_block_after_full() {
  * Find Binary Header
  */
 void test_find_binary_header_handles_random_data() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
     int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
@@ -213,7 +218,8 @@ void test_find_binary_header_handles_random_data() {
     TEST_ASSERT_EQUAL_INT(start+step,freq);
 }
 void test_find_binary_header_constructs_correct_first_point() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
     int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
@@ -230,7 +236,8 @@ void test_find_binary_header_constructs_correct_first_point() {
     TEST_ASSERT_EQUAL_INT(start,fp.frequency);
 }
 void test_find_binary_header_fails_gracefully() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read()");
     int vna_id = 0;
     char msg_buff[100];
     int start = 50000000;
@@ -251,7 +258,8 @@ void test_find_binary_header_fails_gracefully() {
  * Pull Scan
  */
 void test_pull_scan_constructs_valid_data() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");
     int vna_id = 0;
     int start = 50000000;
     
@@ -268,7 +276,8 @@ void test_pull_scan_constructs_valid_data() {
     free(data);
 }
 void test_pull_scan_takes_correct_number_points_low() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");
     int points_per_scan = 1;
     int vna_id = 0;
     int start = 50000000;
@@ -286,7 +295,8 @@ void test_pull_scan_takes_correct_number_points_low() {
     points_per_scan = 101;
 }
 void test_pull_scan_takes_correct_number_points_high() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");
     int points_per_scan = 201;
     int vna_id = 0;
     int start = 50000000;
@@ -304,7 +314,8 @@ void test_pull_scan_takes_correct_number_points_high() {
     points_per_scan = 101;
 }
 void test_pull_scan_nulls_malformed_data() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");
     int vna_id = 0;
     int start = 50000000;
     write_command(vna_id,"malform\r");
@@ -319,7 +330,8 @@ void test_pull_scan_nulls_malformed_data() {
  * Producers
  */
 void test_scan_producer_takes_correct_points() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");
     int vna_id = 0;
     int start = 50000000;
 
@@ -355,7 +367,8 @@ void test_scan_producer_takes_correct_points() {
     destroy_bounded_buffer(b);
 }
 void test_timed_sweep_producer_takes_correct_time() {
-    if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");
     int vna_id = 0;
     int start = 50000000;
 
@@ -447,6 +460,234 @@ void test_consumer_constructs_valid_output() {
     destroy_bounded_buffer(b);
 }
 
+/**
+ * Scan State Logic
+ */
+
+extern int ongoing_scans;
+
+// initialise_scan_state
+void test_initialise_scan_state() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+
+    ongoing_scans = 13;
+
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, initialise_scan_state());
+    TEST_ASSERT_NOT_NULL(scan_states);
+    TEST_ASSERT_NOT_NULL(scan_threads);
+    TEST_ASSERT_EQUAL_INT(0, ongoing_scans);
+    #endif
+}
+void test_initialise_scan_state_already_done() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+
+    scan_states = malloc(sizeof(int));
+    scan_threads = malloc(sizeof(pthread_t));
+
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, initialise_scan_state());
+    TEST_ASSERT_NOT_NULL(scan_states);
+    TEST_ASSERT_NOT_NULL(scan_threads);
+    TEST_ASSERT_EQUAL_INT(0, ongoing_scans);
+    #endif
+}
+
+// initialise_scan
+void test_initialise_scan() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+    initialise_scan_state();
+
+    int scan_id = initialise_scan();
+    TEST_ASSERT_GREATER_OR_EQUAL(0,scan_id);
+    TEST_ASSERT_EQUAL_INT(0,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(1,ongoing_scans);
+    #endif
+}
+void test_initialise_scan_max_ongoing() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+    initialise_scan_state();
+
+    ongoing_scans = MAX_ONGOING_SCANS;
+
+    int scan_id = initialise_scan();
+    TEST_ASSERT_GREATER_OR_EQUAL(-1,scan_id);
+    TEST_ASSERT_EQUAL_INT(MAX_ONGOING_SCANS,ongoing_scans);
+    #endif
+}
+void test_initialise_scan_one_free_spot() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+    initialise_scan_state();
+
+    int fake_status = 10;
+    ongoing_scans = MAX_ONGOING_SCANS-1;
+    for (int i = 0; i < MAX_ONGOING_SCANS-1; i++) {
+        scan_states[i] = fake_status;
+    }
+
+    int scan_id = initialise_scan();
+    TEST_ASSERT_EQUAL_INT(MAX_ONGOING_SCANS-1,scan_id);
+    TEST_ASSERT_EQUAL_INT(0,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(fake_status,scan_states[0]);
+    TEST_ASSERT_EQUAL_INT(MAX_ONGOING_SCANS,ongoing_scans);
+    #endif
+}
+void test_initialise_scan_uninitialised_states() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+    
+    int scan_id = initialise_scan();
+    TEST_ASSERT_GREATER_OR_EQUAL(0,scan_id);
+    TEST_ASSERT_EQUAL_INT(0,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(1,ongoing_scans);
+    #endif
+}
+
+// destroy scan
+void test_destroy_scan() {
+    #ifndef TESTSUITE
+    TEST_IGNORE_MESSAGE("Needs fix for static");
+    #else
+    initialise_scan_state();
+
+    int scan_id = 0;
+    scan_states[scan_id] = 0;
+    ongoing_scans = 1;
+
+    destroy_scan(scan_id);
+    TEST_ASSERT_EQUAL_INT(-1,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(0,ongoing_scans);
+    #endif
+}
+
+// is_running
+void test_is_running_false() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = MAX_ONGOING_SCANS-1;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = 0;
+    }
+    
+    int scan_id = 1;
+    scan_states[scan_id] = -1;
+    TEST_ASSERT_FALSE(is_running(scan_id));
+}
+void test_is_running_true() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 1;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = -1;
+    }
+    
+    int scan_id = 1;
+    scan_states[scan_id] = 10;
+    TEST_ASSERT_TRUE(is_running(scan_id));
+}
+void test_is_running_null() {
+    TEST_ASSERT_FALSE(is_running(1));
+}
+void test_is_running_out_of_range() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 0;
+
+    TEST_ASSERT_FALSE(is_running(MAX_ONGOING_SCANS));
+    TEST_ASSERT_FALSE(is_running(-1));
+}
+
+// get state
+void test_get_state_vacant() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 0;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = -1;
+    }
+
+    int scan_id = 1;
+
+    char* state_buffer = calloc(sizeof(char),8);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, get_state(scan_id, state_buffer));
+    TEST_ASSERT_EQUAL_STRING("vacant",state_buffer);
+
+    free(state_buffer);
+}
+void test_get_state_idle() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 0;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = -1;
+    }
+
+    int scan_id = 1;
+    scan_states[scan_id] = 0;
+
+    char* state_buffer = calloc(sizeof(char),8);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, get_state(scan_id, state_buffer));
+    TEST_ASSERT_EQUAL_STRING("idle",state_buffer);
+
+    free(state_buffer);
+}
+void test_get_state_ongoing() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 0;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = -1;
+    }
+
+    int scan_id = 1;
+    scan_states[scan_id] = 10;
+
+    char* state_buffer = calloc(sizeof(char),8);
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, get_state(scan_id, state_buffer));
+    TEST_ASSERT_EQUAL_STRING("busy",state_buffer);
+
+    free(state_buffer);
+}
+void test_get_state_null() {
+    char* state_buffer = calloc(sizeof(char),8);
+    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE, get_state(0, state_buffer));
+
+    free(state_buffer);
+}
+void test_get_state_out_of_range() {
+    scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
+    ongoing_scans = 0;
+    for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+        scan_states[i] = -1;
+    }
+
+    char* state_buffer = calloc(sizeof(char),8);
+    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE, get_state(MAX_ONGOING_SCANS, state_buffer));
+    TEST_ASSERT_EQUAL_INT(EXIT_FAILURE, get_state(-1, state_buffer));
+
+    free(state_buffer);
+}
+
+/**
+ * Scan Logic
+ */
+void test_stop_sweep_stops() {
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking vnas");
+
+    int scan_id = start_sweep(vnas_mocked,1,50000000,55000000,ONGOING,1,PPS,"TestRun",false);
+    sleep(1);
+    TEST_ASSERT_GREATER_OR_EQUAL(0,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(1,ongoing_scans);
+
+    TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS, stop_sweep(scan_id));
+    TEST_ASSERT_EQUAL_INT(-1,scan_states[scan_id]);
+    TEST_ASSERT_EQUAL_INT(0,ongoing_scans);
+}
+
 int main(int argc, char *argv[]) {
     UNITY_BEGIN();
 
@@ -479,6 +720,30 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_scan_producer_takes_correct_points);
     RUN_TEST(test_timed_sweep_producer_takes_correct_time);
     RUN_TEST(test_consumer_constructs_valid_output);
+
+    // scan state tests (private)
+    RUN_TEST(test_initialise_scan_state);
+    RUN_TEST(test_initialise_scan_state_already_done);
+    RUN_TEST(test_initialise_scan);
+    RUN_TEST(test_initialise_scan_max_ongoing);
+    RUN_TEST(test_initialise_scan_one_free_spot);
+    RUN_TEST(test_initialise_scan_uninitialised_states);
+    RUN_TEST(test_destroy_scan);
+
+    // scan state tests (public)
+    RUN_TEST(test_is_running_false);
+    RUN_TEST(test_is_running_true);
+    RUN_TEST(test_is_running_null);
+    RUN_TEST(test_is_running_out_of_range);
+
+    RUN_TEST(test_get_state_vacant);
+    RUN_TEST(test_get_state_idle);
+    RUN_TEST(test_get_state_ongoing);
+    RUN_TEST(test_get_state_null);
+    RUN_TEST(test_get_state_out_of_range);
+
+    // scan logic tests
+    RUN_TEST(test_stop_sweep_stops);
 
     return UNITY_END();
 }
