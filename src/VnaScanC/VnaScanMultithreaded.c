@@ -364,11 +364,21 @@ FILE * create_touchstone_file(struct tm *tm_info) {
 //----------------------------------------
 
 /**
+ * Ensures functions which use the static keyword to be private
+ * can still be tested
+ */
+#ifdef TESTSUITE
+#define STATIC  
+#else
+#define STATIC static
+#endif
+
+/**
  * Initialises scan state arrays if they are not already initialised.
  * 
  * @return EXIT_SUCCESS on success, error code on failure
  */
-static int initialise_scan_state() {
+STATIC int initialise_scan_state() {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
         ongoing_scans = 0;
@@ -404,7 +414,7 @@ static int initialise_scan_state() {
  * @return scan_id, location of scan in scan tracking state structures.
  * If negative, failed to allocate space for scan.
  */
-static int initialise_scan() {
+STATIC int initialise_scan() {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
         pthread_mutex_unlock(&scan_state_lock);
@@ -443,7 +453,7 @@ static int initialise_scan() {
  * 
  * @param scan_id location of finished scan in scan tracking state structures
  */
-static void destroy_scan(int scan_id) {
+STATIC void destroy_scan(int scan_id) {
     pthread_mutex_lock(&scan_state_lock);
     scan_states[scan_id] = -1;
     ongoing_scans--;
@@ -451,7 +461,7 @@ static void destroy_scan(int scan_id) {
 }
 
 bool is_running(int scan_id) {
-    if (scan_states == NULL || scan_id < 0 || scan_id > MAX_ONGOING_SCANS)
+    if (scan_states == NULL || scan_id < 0 || scan_id >= MAX_ONGOING_SCANS)
         return false;
 
     pthread_mutex_lock(&scan_state_lock);
@@ -462,7 +472,7 @@ bool is_running(int scan_id) {
 }
 
 int get_state(int scan_id, char* state_buffer) {
-    if (scan_states == NULL || scan_id < 0 || scan_id > MAX_ONGOING_SCANS)
+    if (scan_states == NULL || scan_id < 0 || scan_id >= MAX_ONGOING_SCANS)
         return EXIT_FAILURE;
 
     pthread_mutex_lock(&scan_state_lock);

@@ -493,7 +493,16 @@ int initialise_settings() {
     return initialise_port_array();
 }
 
+/**
+ * Main method is not defined for testing (conflicts with Unity
+ * main method) but otherwise is used.
+ */
 #ifndef TESTSUITE
+
+/**
+ * Initialises settings then repeatedly calls read_command
+ * until it returns 1 (meaning the exit command has been sent)
+ */
 int main() {
     initialise_settings();
     int fin = 0;

@@ -231,6 +231,19 @@ FILE * create_touchstone_file(struct tm *tm_info);
 //----------------------------------------
 
 /**
+ * The following methods are only defined publicly here in testing
+ * compilation units. They are otherwise static and private to
+ * the source file.
+ * 
+ * Full descriptions can be found in the source file.
+ */
+#ifdef TESTSUITE
+int initialise_scan_state();
+int initialise_scan();
+void destroy_scan(int scan_id);
+#endif
+
+/**
  * Checks if a running scan is occupying a scan_id
  * 
  * @param scan_id ID used to reference the chosen scan thread
