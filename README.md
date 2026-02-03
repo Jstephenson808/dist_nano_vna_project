@@ -90,7 +90,7 @@ You can find a list of available commands for this app with the following comman
 >>> help
 ```
 
-Or find details about a given command like so:
+Or find details about a given command:
 
 ```bash
 ./VnaCommandParser
@@ -104,7 +104,7 @@ e.g.
 
 ### Scanner Only
 
-If you do not wish to use the command parser, you can instead use just the scanner (`VnaScanMultithreaded.c`) compiled with a simple main function, `VnaScanMultithreadedMain.c`, like so:
+If you do not wish to use the command parser, you can instead use just the scanner (`VnaScanMultithreaded.c`) compiled with a simple main function, `VnaScanMultithreadedMain.c`:
 
 ```bash
 cd src/VnaScanC
@@ -155,11 +155,30 @@ This will ignore some tests as there is no VNA connected. They can also be run w
 ```
 This will run all tests, although there are a couple that will only work properly with the simulated VNA.
 
-We also have a small bash file that can simulate having a VNA connected for the purposes of testing. 
-To run this file you need to ensure that you have the Python modules socat and pyserial, and have run the Makefile.
-The file is then run like so:
+We also have a small bash script that can simulate having a VNA connected for the purposes of testing. 
+To run this script you need to ensure that you have the Python modules socat and pyserial, and have run the Makefile.
+Then just pass it to bash:
 ```bash
+cd test
 bash simulatedTests.sh
+```
+
+For debugging purposes, it is also possible to compile executables with debugging sybols readable by programs like gdb.
+To do this, compile a debug version of the test / program with make, for example:
+```bash
+cd src/VnaScanC
+make DebugVnaScanMultithreaded
+```
+Then you can run the file, or even the simulated tests bash script, with a debugger e.g.
+```bash
+cd src/VnaScanC
+gdb VnaScanMultithreaded
+(gdb) run 50000000 900000000 20 -s 5 101 1 /dev/ttyACM0
+```
+
+```bash
+cd test
+gdb bash simulatedTests.sh
 ```
 
 ## Scan Modes
