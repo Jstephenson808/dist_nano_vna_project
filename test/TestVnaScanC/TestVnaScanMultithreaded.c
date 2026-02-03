@@ -445,13 +445,16 @@ void test_consumer_constructs_valid_output() {
 
     b->complete=0;
 
+    struct timeval program_start_time;
+    gettimeofday(&program_start_time, NULL);
+
     struct scan_consumer_args args;
     args.bfr = b;
     args.touchstone_file = NULL;
     args.id_string = "";
     args.label = "";
     args.verbose = false;
-    args.program_start_time;
+    args.program_start_time = program_start_time;
     scan_consumer(&args);
 
     // CHECK OUTPUT CORRECT (I'll figure out how later)
