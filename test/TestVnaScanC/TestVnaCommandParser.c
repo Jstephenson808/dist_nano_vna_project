@@ -21,13 +21,13 @@ void tearDown(void) {
     /* This is run after EACH TEST */
 }
 
-void testReadCommandUsesSweepsModeNoArgs() {
+void testReadCommandUsesOngoingModeNoArgs() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
     read_command();
-    TEST_ASSERT_EQUAL(sweep_mode, NUM_SWEEPS);
+    TEST_ASSERT_EQUAL(sweep_mode, ONGOING);
 }
-void testReadCommandUsesSweepsModeSweepsArgs() {
+void testReadCommandUsesSweepsModeSweepsArg() {
     if (!vna_mocked)
         TEST_IGNORE_MESSAGE("cannot test without mocked input and VNA");
     read_command();
@@ -65,8 +65,8 @@ int main(int argc, char *argv[]) {
      * these tests will only work in this order and with a matching order
      * file (testin.txt) being piped into stdin
      */
-    RUN_TEST(testReadCommandUsesSweepsModeNoArgs);
-    RUN_TEST(testReadCommandUsesSweepsModeSweepsArgs);
+    RUN_TEST(testReadCommandUsesOngoingModeNoArgs);
+    RUN_TEST(testReadCommandUsesSweepsModeSweepsArg);
     RUN_TEST(testReadCommandUsesTimeModeTimeArg);
     RUN_TEST(testHelpCommandReturnsSuccess);
     RUN_TEST(testExitCommandReturnsOne);

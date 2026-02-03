@@ -216,7 +216,7 @@ void scan() {
             if (err == EXIT_SUCCESS)
                 printf("    %d - %s\n", i, status);
             else
-                printf("    error fetching %d\n", i, status);
+                printf("    error fetching %d\n", i);
         }
         free(status);
     } else {

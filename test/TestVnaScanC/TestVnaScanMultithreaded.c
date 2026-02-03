@@ -3,37 +3,42 @@
 
 #define UNITY_INCLUDE_CONFIG_H
 
+#define PPS 101
+
 int vnas_mocked = 0;
 char **mock_ports;
 
-extern int points_per_scan;
-extern int vna_count;
+/**
+ * extern from VnaScanMultithreaded, for testing
+ * producers and consumers
+ */
+extern int* scan_states;
 
+/**
+ * extern from VnaCommunication, purely for flushing I/O
+ */
 extern int* vna_fds;
 
 void setUp(void) {
     /* This is run before EACH TEST */
-    points_per_scan = 101;
     if (vnas_mocked) {
-        vna_count = 0;
         initialise_port_array();
         for (int i = 0; i < vnas_mocked; i++) {
-            if (add_vna(mock_ports[i]) == 0) {
-                vna_count++;
-            }
+            add_vna(mock_ports[i]);
         }
-        for (int i = 0; i < vna_count; i++)
+        for (int i = 0; i < vnas_mocked; i++) {
             tcflush(vna_fds[i],TCIOFLUSH);
-    } else {
-        /* tell VnaScanMultithreaded.c we have 1 vna for buffer functions */
-        vna_count = 1;
+        }
     }
 }
 
 void tearDown(void) {
     /* This is run after EACH TEST */
     teardown_port_array();
-    vna_count = 0;
+    if (scan_states) {
+        free(scan_states);
+        scan_states = NULL;
+    }
 }
 
 /**
@@ -45,7 +50,7 @@ void test_find_binary_header_handles_random_data() {
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
     
     write_command(vna_id,"info\r");
     sleep(1);
@@ -53,7 +58,7 @@ void test_find_binary_header_handles_random_data() {
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
     TEST_ASSERT_EQUAL_INT(0,error);
 
     uint32_t freq;
@@ -67,13 +72,13 @@ void test_find_binary_header_constructs_correct_first_point() {
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
     
     write_command(vna_id,msg_buff);
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
 
     TEST_ASSERT_EQUAL_INT(start,fp.frequency);
@@ -84,15 +89,15 @@ void test_find_binary_header_fails_gracefully() {
     char msg_buff[100];
     int start = 50000000;
     int step = 1000;
-    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(points_per_scan-1)), points_per_scan, MASK);
+    snprintf(msg_buff, sizeof(msg_buff), "scan %d %d %i %i\r", start, start+(step*(PPS-1)), PPS, MASK);
     
     write_command(vna_id,msg_buff);
     sleep(1);
 
     struct nanovna_raw_datapoint fp;
-    int error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    int error = find_binary_header(vna_id,&fp,MASK,PPS);
     TEST_ASSERT_EQUAL_INT(EXIT_SUCCESS,error);
-    error = find_binary_header(vna_id,&fp,MASK,points_per_scan);
+    error = find_binary_header(vna_id,&fp,MASK,PPS);
     TEST_ASSERT_NOT_EQUAL_INT(EXIT_SUCCESS,error);
 }
 
@@ -101,7 +106,7 @@ void test_find_binary_header_fails_gracefully() {
  */
 void test_create_bounded_buffer() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    int error = create_bounded_buffer(b);
+    int error = create_bounded_buffer(b,PPS);
     TEST_ASSERT_EQUAL(0,error);
     TEST_ASSERT_NOT_NULL(b->buffer);
     destroy_bounded_buffer(b);
@@ -112,7 +117,7 @@ void test_create_bounded_buffer() {
  */
 void test_add_buff_adds() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     TEST_ASSERT_EQUAL_INT(0,b->in);
     TEST_ASSERT_EQUAL_INT(0,b->count);
     b->buffer[b->in] = NULL;
@@ -126,7 +131,7 @@ void test_add_buff_adds() {
 }
 void test_add_buff_cycles() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     b->in = N-1;
     b->buffer[b->in] = NULL;
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
@@ -147,7 +152,7 @@ void* thread_imitator_add(void *arguments) {
 }
 void test_add_buff_escapes_block_after_full() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     b->count = N;
     b->buffer[b->in] = NULL;
 
@@ -182,7 +187,7 @@ void test_add_buff_escapes_block_after_full() {
  */
 void test_take_buff_takes() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     b->buffer[b->out] = data;
     b->count = 1;
@@ -195,7 +200,7 @@ void test_take_buff_takes() {
 }
 void test_take_buff_cycles() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     b->out = N-1;
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     b->buffer[b->out] = data;
@@ -213,7 +218,7 @@ void* thread_imitator_take(void *arguments) {
 }
 void test_take_buff_escapes_block_after_full() {
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
     b->count = 0;
 
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
@@ -243,20 +248,20 @@ void test_take_buff_escapes_block_after_full() {
 }
 
 /**
- * Producer & Helpers
+ * Pull Scan
  */
 void test_pull_scan_constructs_valid_data() {
     if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
     int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(PPS*100000),PPS);
 
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT_EQUAL_INT(0,data->vna_id);
     TEST_ASSERT_NOT_NULL(data->point);
-    for (int i = 0; i < points_per_scan; i++) {
-        TEST_ASSERT_EQUAL_INT(start+(i*points_per_scan*1000),data->point[i].frequency);
+    for (int i = 0; i < PPS; i++) {
+        TEST_ASSERT_EQUAL_INT(start+(i*PPS*1000),data->point[i].frequency);
     }
 
     free(data->point);
@@ -264,11 +269,11 @@ void test_pull_scan_constructs_valid_data() {
 }
 void test_pull_scan_takes_correct_number_points_low() {
     if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    points_per_scan = 1;
+    int points_per_scan = 1;
     int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000), points_per_scan);
 
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT_NOT_NULL(data->point);
@@ -282,11 +287,11 @@ void test_pull_scan_takes_correct_number_points_low() {
 }
 void test_pull_scan_takes_correct_number_points_high() {
     if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Cannot test without mocking read_exact()");}
-    points_per_scan = 201;
+    int points_per_scan = 201;
     int vna_id = 0;
     int start = 50000000;
     
-    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000), points_per_scan);
 
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT_NOT_NULL(data->point);
@@ -305,34 +310,43 @@ void test_pull_scan_nulls_malformed_data() {
     write_command(vna_id,"malform\r");
     sleep(1);
     
-    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(points_per_scan*100000));
+    struct datapoint_nanoVNA_H* data = pull_scan(vna_id,start,start+(PPS*100000),PPS);
     TEST_ASSERT_NULL(data);
     sleep(2);
 }
-void test_producer_num_takes_correct_points() {
+
+/**
+ * Producers
+ */
+void test_scan_producer_takes_correct_points() {
     if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
     int vna_id = 0;
     int start = 50000000;
+
+    int scan_id = 0;
+    scan_states = calloc(sizeof(int),1);
+    scan_states[scan_id] = 1;
     
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
 
     int scans = 2;
-    int size = ((scans*points_per_scan-1)*100000);
-    int step = size / (scans*points_per_scan-1);
+    int size = ((scans*PPS-1)*100000);
+    int step = size / (scans*PPS-1);
 
     struct scan_producer_args args;
+    args.scan_id = scan_id;
     args.vna_id = vna_id;
     args.nbr_scans = scans;
     args.start = start;
     args.stop = start+size;
     args.nbr_sweeps = 1; 
     args.bfr = b;
-    scan_producer_num(&args);
+    scan_producer(&args);
     for (int scan = 0; scan < scans; scan++) {
         TEST_ASSERT_NOT_NULL_MESSAGE(b->buffer[scan], "Producer failed to cappture scan data");
-        for (int i = 0; i < points_per_scan; i++) {
-            int expected = start+((scan*points_per_scan + i)*step);
+        for (int i = 0; i < PPS; i++) {
+            int expected = start+((scan*PPS + i)*step);
             TEST_ASSERT_EQUAL_INT(expected,b->buffer[scan]->point[i].frequency);
         }
         free(b->buffer[scan]->point);
@@ -340,19 +354,24 @@ void test_producer_num_takes_correct_points() {
     }
     destroy_bounded_buffer(b);
 }
-void test_producer_time_takes_correct_time() {
+void test_timed_sweep_producer_takes_correct_time() {
     if (!vnas_mocked) {TEST_IGNORE_MESSAGE("Requires mocking pull_scan()");}
     int vna_id = 0;
     int start = 50000000;
+
+    int scan_id = 0;
+    scan_states = calloc(sizeof(int),1);
+    scan_states[scan_id] = 1;
     
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
 
     int scans = 2;
-    int size = ((scans*points_per_scan-1)*100000);
+    int size = ((scans*PPS-1)*100000);
     int time_to_scan = 2;
 
     struct scan_producer_args scan_args;
+    scan_args.scan_id = scan_id;
     scan_args.vna_id = vna_id;
     scan_args.nbr_scans = scans;
     scan_args.start = start;
@@ -362,7 +381,7 @@ void test_producer_time_takes_correct_time() {
 
     struct scan_timer_args time_args;
     time_args.time_to_wait = time_to_scan;
-    time_args.b = b;
+    time_args.scan_id = scan_id;
 
     struct timeval start_time, end_time;
     pthread_t thread;
@@ -373,7 +392,7 @@ void test_producer_time_takes_correct_time() {
         fprintf(stderr, "Error %i creating timer thread for test_producer_time_takes_correct_time(): %s\n", errno, strerror(errno));
         return;
     }
-    scan_producer_time(&scan_args);
+    sweep_producer(&scan_args);
     gettimeofday(&end_time,NULL);
 
     int time_expired = end_time.tv_sec-start_time.tv_sec;
@@ -390,12 +409,12 @@ void test_producer_time_takes_correct_time() {
 }
 
 /**
- * Consumer & Helpers
+ * Consumer
  */
 void test_consumer_constructs_valid_output() {
     TEST_IGNORE_MESSAGE("Requires mocking printf()");
     struct bounded_buffer *b = malloc(sizeof(struct bounded_buffer));
-    create_bounded_buffer(b);
+    create_bounded_buffer(b,PPS);
 
     struct datapoint_nanoVNA_H *data = calloc(1,sizeof(struct datapoint_nanoVNA_H));
     struct timeval time;
@@ -404,7 +423,7 @@ void test_consumer_constructs_valid_output() {
     data->vna_id = 1;
     data->send_time = time;
     data->receive_time = time;
-    for (int i = 0; i < points_per_scan; i++) {
+    for (int i = 0; i < PPS; i++) {
         data->point[i] = (struct nanovna_raw_datapoint) {0,{0,0},{0,0}};
     }
 
@@ -413,7 +432,13 @@ void test_consumer_constructs_valid_output() {
 
     b->complete=0;
 
-    struct scan_consumer_args args = {b};
+    struct scan_consumer_args args;
+    args.bfr = b;
+    args.touchstone_file = NULL;
+    args.id_string = "";
+    args.label = "";
+    args.verbose = false;
+    args.program_start_time;
     scan_consumer(&args);
 
     // CHECK OUTPUT CORRECT (I'll figure out how later)
@@ -451,8 +476,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_pull_scan_takes_correct_number_points_low);
     RUN_TEST(test_pull_scan_takes_correct_number_points_high);
     RUN_TEST(test_pull_scan_nulls_malformed_data);
-    RUN_TEST(test_producer_num_takes_correct_points);
-    RUN_TEST(test_producer_time_takes_correct_time);
+    RUN_TEST(test_scan_producer_takes_correct_points);
+    RUN_TEST(test_timed_sweep_producer_takes_correct_time);
     RUN_TEST(test_consumer_constructs_valid_output);
 
     return UNITY_END();
