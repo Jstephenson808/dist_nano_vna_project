@@ -1,12 +1,38 @@
 #include "VnaCommunication.h"
 #include <glob.h>
 
+/**
+ * Current number of connected VNAs
+ */
 int total_vnas = 0;
+
+/**
+ * Pointers to the paths of all currently connected VNAs
+ * path length < MAXIMUM_VNA_PATH_LENGTH
+ * indexed by vna_id
+ * NULL if unnocupied, must be malloced and freed
+ */
 char **vna_names = NULL;
+
+/**
+ * The file descriptors of all currently connected VNAs
+ * indexed by vna_id
+ * -1 if unnocupied, >=0 if occupied.
+ */
 int * vna_fds = NULL;
+
+/**
+ * The initial settings of all currently connected VNAs
+ * indexed by vna_id
+ * May be any value when unnocupied, must be written over.
+ */
 struct termios* vna_initial_settings = NULL;
 
-static volatile sig_atomic_t fatal_error_in_progress = 0; // For proper SIGINT handling
+/**
+ * For SIGINT handling, ensures signal handler cannot
+ * devolve into endless recursion.
+ */
+static volatile sig_atomic_t fatal_error_in_progress = 0;
 
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
@@ -197,6 +223,23 @@ int in_vna_list(const char* vna_path) {
     return 0;
 }
 
+bool is_connected(int vna_id) {
+    return (vna_fds[vna_id] >= 0);
+}
+
+int get_connected_vnas(int* vna_list) {
+    int count = 0;
+    int i = 0;
+    while (count < total_vnas) {
+        if (vna_fds[i] >= 0) {
+            vna_list[count] = i;
+            count++;
+        }
+        i++;
+    }
+    return count;
+}
+
 int add_vna(char* vna_path) {
     if (total_vnas >= MAXIMUM_VNA_PORTS)
         return 1;
@@ -210,21 +253,36 @@ int add_vna(char* vna_path) {
     int fd = open_serial(vna_path,&vna_initial_settings[total_vnas]);
     if (fd < 0)
         return -1;
-    vna_fds[total_vnas] = fd;
 
-    if (test_vna(total_vnas) != EXIT_SUCCESS) {
-        restore_serial(fd,&vna_initial_settings[total_vnas]);
+    int vna_id = -1;
+    int i = 0;
+    while (i < MAXIMUM_VNA_PORTS && vna_id < 0) {
+        if (vna_fds[i] < 0)
+            vna_id = i;
+        i++;
+    }
+    if (vna_id < 0) {
+        fprintf(stderr, "how did we get here? add\n");
+        return -1;
+    }
+
+    vna_fds[vna_id] = fd;
+
+    if (test_vna(vna_id) != EXIT_SUCCESS) {
+        restore_serial(fd,&vna_initial_settings[vna_id]);
         close(fd);
+        vna_fds[vna_id] = -1;
         return 4;
     }
     
-    vna_names[total_vnas] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    if (!vna_names[total_vnas]) {
-        restore_serial(fd,&vna_initial_settings[total_vnas]);
+    vna_names[vna_id] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
+    if (!vna_names[vna_id]) {
+        restore_serial(fd,&vna_initial_settings[vna_id]);
         close(fd);
+        vna_fds[vna_id] = -1;
         return -1;
     }
-    strncpy(vna_names[total_vnas],vna_path,path_len);
+    strncpy(vna_names[vna_id],vna_path,path_len);
     total_vnas++;
 
     return EXIT_SUCCESS;
@@ -251,14 +309,10 @@ int remove_vna_name(char* vna_path) {
         fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
     }
 
-    if (vna_num != total_vnas-1) {
-        strncpy(vna_names[vna_num],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
-        vna_fds[vna_num] = vna_fds[total_vnas-1];
-        vna_initial_settings[vna_num] = vna_initial_settings[total_vnas-1];
-    }
+    vna_fds[vna_num] = -1;
+    free(vna_names[vna_num]);
+    vna_names[vna_num] = NULL;
 
-    free(vna_names[total_vnas-1]);
-    vna_names[total_vnas-1] = NULL;
     total_vnas--;
 
     return EXIT_SUCCESS;
@@ -266,7 +320,10 @@ int remove_vna_name(char* vna_path) {
 
 int remove_vna_number(int vna_num) {
 
-    if (vna_num < 0 || vna_num > total_vnas) {
+    if (vna_num < 0 || vna_num > MAXIMUM_VNA_PORTS) {
+        return EXIT_FAILURE;
+    } else if (vna_fds[vna_num] < 0) {
+        fprintf(stderr, "No connection at vna id %d\n", vna_num);
         return EXIT_FAILURE;
     }
 
@@ -277,14 +334,10 @@ int remove_vna_number(int vna_num) {
         fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
     }
 
-    if (vna_num != total_vnas-1) {
-        strncpy(vna_names[vna_num],vna_names[total_vnas-1],MAXIMUM_VNA_PATH_LENGTH);
-        vna_fds[vna_num] = vna_fds[total_vnas-1];
-        vna_initial_settings[vna_num] = vna_initial_settings[total_vnas-1];
-    }
+    vna_fds[vna_num] = -1;
+    free(vna_names[vna_num]);
+    vna_names[vna_num] = NULL;
 
-    free(vna_names[total_vnas-1]);
-    vna_names[total_vnas-1] = NULL;
     total_vnas--;
 
     return EXIT_SUCCESS;
@@ -369,8 +422,10 @@ void vna_status() {
 }
 
 void print_vnas() {
-    for (int i = 0; i < total_vnas; i++) {
-        printf("    %d. %s\n", i+1, vna_names[i]);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (vna_fds[i] >= 0) {
+            printf("    %d. %s\n", i, vna_names[i]);
+        }
     }
 }
 
@@ -406,15 +461,18 @@ int initialise_port_array() {
         }
         return EXIT_FAILURE;
     }
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++)
+        vna_fds[i] = -1;
     total_vnas = 0;
 
     return EXIT_SUCCESS;
 }
 
 void teardown_port_array() {
-    while (total_vnas > 0) {
-        int i = total_vnas-1;
-        remove_vna_number(i);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (is_connected(i)) {
+            remove_vna_number(i);
+        }
     }
 
     free(vna_initial_settings);

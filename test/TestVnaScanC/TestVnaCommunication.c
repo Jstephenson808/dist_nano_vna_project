@@ -16,20 +16,15 @@ void init_test_ports() {
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
     vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
+
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++)
+        vna_fds[i] = -1;
+    
     total_vnas = 0;
 }
 
 void open_test_ports() {
     for (int i = 0; i < vnas_mocked; i++) {
-        /**
-        vna_names[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        strncpy(vna_names[i],mock_ports[i],MAXIMUM_VNA_PATH_LENGTH);
-        vna_fds[i] = open_serial(mock_ports[i],&vna_initial_settings[i]);
-        if (vna_fds[i] >= 0)
-            total_vnas++;
-        else
-            fprintf(stderr,"failed to connect vna %d\n",i);
-        */
        add_vna(mock_ports[i]);
     }
 }

@@ -291,7 +291,8 @@ void* scan_consumer(void *arguments) {
     int pps = args->bfr->pps;
 
     FILE *f = args->touchstone_file;
-    printf("ID Label VNA TimeSent TimeRecv Freq SParam Format Value\n");
+    if (args->verbose)
+        printf("ID Label VNA TimeSent TimeRecv Freq SParam Format Value\n");
 
     while (!args->bfr->complete || (args->bfr->count != 0)) {
 
@@ -341,7 +342,7 @@ void* scan_consumer(void *arguments) {
 // Touchstone Logic
 //----------------------------------------
 
-FILE * create_touchstone_file(struct tm *tm_info) {
+FILE * create_touchstone_file(struct tm *tm_info, bool verbose) {
     // Create Touchstone file
     char filename[128];
     strftime(filename, sizeof(filename), "vna_scan_at_%Y-%m-%d_%H-%M-%S.s2p", tm_info);
@@ -350,7 +351,8 @@ FILE * create_touchstone_file(struct tm *tm_info) {
     if (!touchstone_file) {
         fprintf(stderr, "Warning: Failed to open %s for writing. Scan will continue without saving.\n", filename);
     } else {
-        printf("Saving data to: %s\n", filename);
+        if (verbose)
+            printf("Saving data to: %s\n", filename);
         // Write standard Touchstone Header
         fprintf(touchstone_file, "! Touchstone file generated from multi-VNA scan\n");
         fprintf(touchstone_file, "! One file containing all VNAS interleaved\n");
@@ -499,6 +501,7 @@ int get_state(int scan_id, char* state_buffer) {
 struct run_sweep_args {
     int scan_id;
     int nbr_vnas;
+    int* vna_list;
     int nbr_scans;
     int start;
     int stop;
@@ -519,7 +522,7 @@ void* run_sweep(void* arguments){
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
 
-    FILE* touchstone_file = create_touchstone_file(tm_info);
+    FILE* touchstone_file = create_touchstone_file(tm_info,args->verbose);
     char id_string[64];
     strftime(id_string, sizeof(id_string), "%Y%m%d_%H%M%S", tm_info);
 
@@ -527,13 +530,16 @@ void* run_sweep(void* arguments){
     struct bounded_buffer *bb = malloc(sizeof(struct bounded_buffer));
     if (!bb) {
         fprintf(stderr, "Failed to allocate memory for bounded buffer construct\n");
+        free(args->vna_list);
+        free(arguments);
         return NULL;
     }
     error = create_bounded_buffer(bb,args->nbr_vnas);
     if (error != 0) {
         fprintf(stderr, "Failed to create bounded buffer\n");
         free(bb);
-        bb = NULL;
+        free(args->vna_list);
+        free(arguments);
         return NULL;
     }
 
@@ -546,7 +552,7 @@ void* run_sweep(void* arguments){
     pthread_t producers[args->nbr_vnas];
     for (int i = 0; i < args->nbr_vnas; i++) {
         producer_args[i].scan_id = args->scan_id;
-        producer_args[i].vna_id = i;
+        producer_args[i].vna_id = args->vna_list[i];
         producer_args[i].nbr_scans = args->nbr_scans;
         producer_args[i].start = args->start;
         producer_args[i].stop = args->stop;
@@ -561,7 +567,6 @@ void* run_sweep(void* arguments){
 
         if(error != 0){
             fprintf(stderr, "Error %i creating producer thread %d: %s\n", errno, i, strerror(errno));
-            return NULL;
         }
     }
 
@@ -578,7 +583,8 @@ void* run_sweep(void* arguments){
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
         destroy_bounded_buffer(bb);
-        bb=NULL;
+        free(args->vna_list);
+        free(arguments);
         return NULL;
     }
 
@@ -609,13 +615,13 @@ void* run_sweep(void* arguments){
 
     // finish up
     destroy_bounded_buffer(bb);
-    bb = NULL;
+    free(args->vna_list);
     free(arguments);
 
     return NULL;
 }
 
-int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose) {
+int start_sweep(int nbr_vnas, int* vna_list, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose) {
 
     if (nbr_vnas < 1) {
         fprintf(stderr, "No VNAs!\n");
@@ -635,6 +641,7 @@ int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode swee
     }
     args->scan_id = scan_id;
     args->nbr_vnas = nbr_vnas;
+    args->vna_list = vna_list;
     args->nbr_scans = nbr_scans;
     args->start = start;
     args->stop = stop;

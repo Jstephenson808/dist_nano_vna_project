@@ -34,7 +34,8 @@ void setUp(void) {
 
 void tearDown(void) {
     /* This is run after EACH TEST */
-    teardown_port_array();
+    if (vnas_mocked)
+        teardown_port_array();
     if (scan_states) {
         free(scan_states);
         scan_states = NULL;
@@ -681,7 +682,10 @@ void test_stop_sweep_stops() {
     if (!vnas_mocked)
         TEST_IGNORE_MESSAGE("Cannot test without mocking vnas");
 
-    int scan_id = start_sweep(vnas_mocked,1,50000000,55000000,ONGOING,1,PPS,"TestRun",false);
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    int nbr_vnas = get_connected_vnas(vna_list);
+
+    int scan_id = start_sweep(nbr_vnas, vna_list,1,50000000,55000000,ONGOING,1,PPS,"TestRun",false);
     sleep(1);
     TEST_ASSERT_GREATER_OR_EQUAL(0,scan_states[scan_id]);
     TEST_ASSERT_EQUAL_INT(1,ongoing_scans);

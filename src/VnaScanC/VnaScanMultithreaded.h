@@ -224,7 +224,7 @@ void* scan_consumer(void *args);
  * @param tm_info time information
  * @return a pointer to the file as returned by fopen
  */
-FILE * create_touchstone_file(struct tm *tm_info);
+FILE * create_touchstone_file(struct tm *tm_info, bool verbose);
 
 //----------------------------------------
 // Scan State Logic
@@ -286,6 +286,7 @@ typedef enum {
  * id to execute the sweep. Does not join that thread, it must be joined with stop_sweep.
  * 
  * @param nbr_vnas Number of VNAs to scan with
+ * @param vna_list Array containing the vna ids of all vnas to be scanned with. Will be freed by end of scan.
  * @param nbr_scans Total number of scans per VNA, determining number of data points to collect (101 dp per scan)
  * @param start Starting frequency in Hz
  * @param stop Stopping frequency in Hz
@@ -300,7 +301,7 @@ typedef enum {
  * 
  * @return scan_id - used to reference this scan thread etc. again (e.g. when closing it)
  */
-int start_sweep(int nbr_vnas, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose);
+int start_sweep(int nbr_vnas, int* vna_list, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose);
 
 /**
  * Signals specified scan to end, waits for it to finish and joins the thread.

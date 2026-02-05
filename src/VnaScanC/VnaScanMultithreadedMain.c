@@ -45,9 +45,6 @@ int main(int argc, char *argv[]) {
         else if (strcmp("-t",argv[4]) == 0) {
             sweep_mode = TIME;
         }
-        else if (strcmp("-o",argv[4]) == 0) {
-            sweep_mode = ONGOING;
-        }
         else {
             fprintf(stderr, "Error: sweep mode must be either '-s' (number of sweeps) or '-t' (time)\n");
             return EXIT_FAILURE;
@@ -103,8 +100,29 @@ int main(int argc, char *argv[]) {
 
     // call a scan
     const char *user_label = "ManualRun";
-    int id = start_sweep(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label,true);
-    sleep(5);
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    if (!vna_list) {
+        fprintf(stderr, "couldn't assign space for vna ids");
+        return EXIT_FAILURE;
+    }
+    int nbr_vnas = get_connected_vnas(vna_list);
+    if (nbr_vnas < 1) {
+        printf("%d vnas not enough", nbr_vnas);
+        return EXIT_FAILURE;
+    }
+
+    int id = start_sweep(nbr_vnas, vna_list, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label,true);
+
+    // wait for scan to be done, then call stop_sweep
+    if (sweep_mode == TIME) {
+        sleep(sweeps);
+    } else if (sweep_mode == NUM_SWEEPS) {
+        char* state_buffer = calloc(sizeof(char),8);
+        do {
+            sleep(1);
+            get_state(id,state_buffer);
+        } while (state_buffer[0] != 'i');
+    }
     stop_sweep(id);
 
     // disconnect VNAs

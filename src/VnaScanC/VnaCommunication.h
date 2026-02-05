@@ -6,6 +6,7 @@
 #include <string.h>
 #include <termios.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <signal.h>
 
@@ -106,6 +107,16 @@ int get_vna_count();
 int in_vna_list(const char* vna_path);
 
 /**
+ * 
+ */
+bool is_connected(int vna_id);
+
+/**
+ * 
+ */
+int get_connected_vnas(int* vna_list);
+
+/**
  * Adds a path to a file representing a VNA connection to ports
  * 
  * Checks that path is a valid length, there is space in ports,
@@ -119,9 +130,10 @@ int add_vna(char* vna_path);
 /**
  * Closes, restores and removes a VNA given its file path.
  * 
- * May reorder the ports array.
- * Will free relevant memory but otherwise leave data,
- * but keeps total_vnas accurate.
+ * Will not reorder the ports array.
+ * Will free name memory and restore fds to -1,
+ * but will leave restore_settings data
+ * keeps total_vnas accurate.
  * 
  * @param vna_path a string pointing to the NanoVNA connection file
  * @return 0 if successful, 1 if fails.
@@ -131,9 +143,10 @@ int remove_vna_name(char* vna_path);
 /**
  * Closes, restores and removes a VNA given its index in the arrays.
  * 
- * May reorder the ports array.
- * Will free relevant memory but otherwise leave data,
- * but keeps total_vnas accurate.
+ * Will not reorder the ports array.
+ * Will free name memory and restore fds to -1,
+ * but will leave restore_settings data
+ * keeps total_vnas accurate.
  * 
  * @param vna_num index of VNA in internal arrays.
  * @return 0 if successful, 1 if fails.
@@ -149,6 +162,9 @@ int remove_vna_number(int vna_num);
  */
 int find_vnas(char** paths, const char* search_dir);
 
+/**
+ * 
+ */
 int add_all_vnas();
 
 /**
