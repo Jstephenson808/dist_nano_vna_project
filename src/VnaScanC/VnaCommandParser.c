@@ -303,7 +303,10 @@ void sweep() {
     char* tok = strtok(NULL, " \n");
     const char *interactive_label = "InteractiveMode";
 
-    if (strcmp(tok, "stop") == 0) {
+    if (tok == NULL) {
+        printf("Usage: sweep <command>\nSee 'help sweep' for more info.\n");
+        return;
+    } else if (strcmp(tok, "stop") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
             for (int i = 0; i < MAX_ONGOING_SCANS; i++) {

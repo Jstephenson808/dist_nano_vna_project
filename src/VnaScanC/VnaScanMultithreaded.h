@@ -134,7 +134,7 @@ int find_binary_header(int vna_id, struct nanovna_raw_datapoint* first_point, ui
  * 
  * @param vna_id the VnaCommunication ID of the VNA to pull from
  * @param start frequency in Hz
- * @param start frequency in Hz
+ * @param stop frequency in Hz
  * @param pps points to pull in this scan
  * @return A pointer to the array of datapoints that have been pulled
  */
