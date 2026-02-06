@@ -371,6 +371,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_in_vna_list_false);
     RUN_TEST(test_in_vna_list_empty);
 
+    RUN_TEST(test_get_connected_vnas);
+    RUN_TEST(test_get_connected_vnas_no_vnas);
+
     RUN_TEST(test_add_vna_adds);
     RUN_TEST(test_add_vna_fails_max_vnas);
     RUN_TEST(test_add_vna_fails_max_path_length);
