@@ -107,12 +107,16 @@ int get_vna_count();
 int in_vna_list(const char* vna_path);
 
 /**
- * 
+ * @return true if there is a vna connected with this id, false if not
  */
 bool is_connected(int vna_id);
 
 /**
+ * Creates a list of all connected VNAs
  * 
+ * @param vna_list the address at which to put the array of VNAs 
+ * (should be of length >= MAXIMUM_VNA_PORTS)
+ * @return number of VNAs in list
  */
 int get_connected_vnas(int* vna_list);
 
@@ -163,7 +167,10 @@ int remove_vna_number(int vna_num);
 int find_vnas(char** paths, const char* search_dir);
 
 /**
+ * Calls find_vnas on the /dev directory, and attempts to add all
+ * serial ports returned by that.
  * 
+ * @return number of VNAs successfully added
  */
 int add_all_vnas();
 

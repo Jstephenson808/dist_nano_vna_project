@@ -208,6 +208,41 @@ void test_in_vna_list_empty() {
 }
 
 /**
+ * get_connected_vnas
+ */
+void test_get_connected_vnas() {
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    
+    open_test_ports();
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        vna_list[i] = -1;
+    }
+
+    TEST_ASSERT_EQUAL_INT(vnas_mocked, get_connected_vnas(vna_list));
+    for (int i = 0; i < vnas_mocked; i++) {
+        TEST_ASSERT_GREATER_OR_EQUAL(0,vna_list[i]);
+    }
+    TEST_ASSERT_EQUAL_INT(-1,vna_list[vnas_mocked]);
+
+    free(vna_list);
+}
+void test_get_connected_vnas_no_vnas() {
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        vna_list[i] = -1;
+    }
+
+    TEST_ASSERT_EQUAL_INT(0, get_connected_vnas(vna_list));
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        TEST_ASSERT_GREATER_OR_EQUAL(-1,vna_list[i]);
+    }
+
+    free(vna_list);
+}
+
+/**
  * add_vna
  */
 void test_add_vna_adds() {
