@@ -6,14 +6,13 @@ A data acquisition system for NanoVNA (Vector Network Analyzer) devices, enablin
 
 ## Overview
 
-This project provides a multithreaded C scanner for interfacing with NanoVNA-H devices to perform rapid RF measurements, using binary protocol communication and a producer-consumer multithreading architecture.
+This project provides a CLI app for interfacing with multiple NanoVNA-H devices to perform rapid RF measurements.
 
 ### Key Features
 
-- **High-Speed Binary Scanning** - Direct binary protocol communication for maximum throughput
-- **Multithreaded Architecture** - Producer-consumer pattern supporting parallel scanning from multiple VNA devices
-- **Calibration Support** - On-device calibration application 
-- **S-Parameter Capture** - Full S11 and S21 complex data acquisition (frequency, real, imaginary components)
+- **Multi-VNA Control** - Can orchestrate sweeps from multiple VNAs at once
+- **Programmable Interface** - Simple Command Line Interface can be utilised by other applications, so setting up and collecting sweeps can be automated easily
+- **Touchstone File Compatibility** - Can output data to stdout, formatted touchstone files, or both
 
 ## Project Structure
 
@@ -22,14 +21,14 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ├── src/                                    # Main project directory
 │   ├── VnaScanC/                           
 │   │   ├── Makefile                        # Build configuration
-│   │   ├── VnaCommandParser.c              # Alternative driver file with CLI command parser
+│   │   ├── VnaCommandParser.c              # Primary driver file with CLI command parser
 │   │   ├── VnaCommandParser.h
 │   │   ├── VnaCommunication.c              # Helpful methods for interacting with VNAs
 │   │   ├── VnaCommunication.h
 │   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
 │   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreaded.h
-│   │   └── VnaScanMultithreadedMain.c      # Driver file for above
+│   │   └── VnaScanMultithreadedMain.c      # Alternate driver file with no CLI command parser, takes sweep details as Command Line Arguments
 │   └── VnaScanPython/
 │       └── VnaScan.py                      # Prototype: initial Python implementation
 └── test/
@@ -60,8 +59,8 @@ This project provides a multithreaded C scanner for interfacing with NanoVNA-H d
 ### 1. Clone Repository
 
 ```bash
-git clone https://stgit.dcs.gla.ac.uk/team-project-h/2025/jh05/jh05-main.git
-cd jh05-main
+git clone https://github.com/Jstephenson808/dist_nano_vna_project.git
+cd dist_nano_vna_project
 ```
 
 ### 2. Build C Scanner
@@ -71,13 +70,45 @@ cd src/VnaScanC
 make
 ```
 
-This will also create and run unit tests for VnaScanMultithreaded, telling you if they pass or fail.
+This will also create and run unit tests, telling you if they pass or fail.
 
 ## Usage
 
-### Main Scanner
+### CLI Command Parser
 
-The primary scanner is `VnaScanMultithreaded`, which supports single or multiple VNA devices:
+The simplest way to run this project is to use the CLI app, `VnaCommandParser`:
+
+```bash
+cd src/VnaScanC
+./VnaCommandParser
+```
+
+You can find a list of available commands for this app with the following command:
+
+```bash
+./VnaCommandParser
+>>> help
+```
+
+Or find details about a given command:
+
+```bash
+./VnaCommandParser
+>>> help <command> [subcommand]
+```
+e.g.
+```bash
+./VnaCommandParser
+>>> help scan
+```
+```bash
+./VnaCommandParser
+>>> help vna add
+```
+
+### Scanner Only
+
+If you do not wish to use the command parser, you can instead use just the scanner (`VnaScanMultithreaded.c`) compiled with a simple main function, `VnaScanMultithreadedMain.c`:
 
 ```bash
 cd src/VnaScanC
@@ -111,53 +142,47 @@ Multiple VNAs (parallel scanning), five 200 point sweeps each, reading 10 points
 ./VnaScanMultithreaded 50000000 900000000 20 -s 5 10 2 dev/ttyACM0 dev/ttyACM1
 ```
 
-### CLI Command Parser
-
-There is an option to use a CLI app to run scans as follows:
-```bash
-cd src/VnaScanC
-./VnaCommandParser
-```
-
-You can find a list of available commands for this app with the following command:
-```bash
-./VnaCommandParser
->>> help
-```
-
-Or find details about a given command like so:
-```bash
-./VnaCommandParser
->>> help <command>
-```
-e.g.
-```bash
-./VnaCommandParser
->>> help scan
-```
-
 ## Testing
 
 We have a unit testing suite, powered by [ThrowTheSwitch's Unity testing framework](https://github.com/ThrowTheSwitch/Unity).
 
-Our unit tests are contained within the test directory. They can be run individually as so (after running the Makefile):
+Our unit tests are contained within the test directory. They can be run individually (after running the Makefile):
 ```bash
 cd test/TestVnaScanC
 ./TestVnaScanMultithreaded
 ./TestVnaCommandParser
 ./TestVnaCommunication
 ```
-This will ignore some tests as there is no VNA connected. They can also be run with a VNA plugged in as so:
+This will ignore some tests as there is no VNA connected. They can also be run with a VNA plugged in:
 ```bash
 ./TestVnaScanMultithreaded dev/ttyACM0
 ```
 This will run all tests, although there are a couple that will only work properly with the simulated VNA.
 
-We also have a small bash file that can simulate having a VNA connected for the purposes of testing. 
-To run this file you need to ensure that you have the Python modules socat and pyserial, and have run the Makefile.
-The file is then run like so:
+We also have a small bash script that can simulate having a VNA connected for the purposes of testing. 
+To run this script you need to ensure that you have the Python modules socat and pyserial, and have run the Makefile.
+Then just pass it to bash:
 ```bash
+cd test
 bash simulatedTests.sh
+```
+
+For debugging purposes, it is also possible to compile executables with debugging sybols readable by programs like gdb.
+To do this, compile a debug version of the test / program with make, for example:
+```bash
+cd src/VnaScanC
+make DebugVnaScanMultithreaded
+```
+Then you can run the file, or even the simulated tests bash script, with a debugger e.g.
+```bash
+cd src/VnaScanC
+gdb VnaScanMultithreaded
+(gdb) run 50000000 900000000 20 -s 5 101 1 /dev/ttyACM0
+```
+
+```bash
+cd test
+gdb bash simulatedTests.sh
 ```
 
 ## Scan Modes
@@ -166,7 +191,17 @@ The scanner supports different mask values for output control:
 
 - **Mask 135** (Recommended): Binary format, S11+S21, with calibration
 - **Mask 143**: Binary format, S11+S21, without calibration
-- **Mask 7**: Text format, S11+S21, with calibration (human-readable)
+
+You can configure the Mask, if you so wish, by changing the value where it says
+```c
+#define MASK 135
+```
+in `VnaScanMultithreaded.h`, then recompiling:
+```bash
+cd src/VnaScanC
+make clean
+make
+```
 
 ## Documentation
 
@@ -187,9 +222,9 @@ make
 ### Code Structure
 
 **Main Implementation:**
-- `VnaScanMultithreaded.c` - Functions to allow for multithreaded, multi-VNA scans.
-- `VnaScanMultithreadedMain.c` - Driver file, takes in user input and calls relevant functions.
+- `VnaScanMultithreaded.c` - Functions to allow for multiple, multithreaded, multi-VNA scans.
 - `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
+- `VnaScanMultithreadedMain.c` - Driver file, takes in command line arguments and starts a scan.
 - `VnaCommandParser.c` - Driver file, repeatedly takes in user input and executes commands.
 - `VnaCommandParser.h` - Header file for above
 - `VnaCommunication.c` - Contains many useful functions for interacting with VNAs. Imported by all files dealing with VNAs directly.

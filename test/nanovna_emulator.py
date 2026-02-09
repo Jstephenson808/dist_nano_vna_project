@@ -58,7 +58,7 @@ class NanoVNAEmulator:
                 # Add delay for accurate speed
                 time.sleep(self.delay_per_point)
         else:        
-            print(f"Scan: {start}-{stop} Hz, {points} points, mask={mask}", file=sys.stderr)
+            # print(f"Scan: {start}-{stop} Hz, {points} points, mask={mask}", file=sys.stderr)
             
             # Send binary header (mask:uint16, points:uint16)
             header = struct.pack('<HH', mask & 0xffff, points & 0xffff)

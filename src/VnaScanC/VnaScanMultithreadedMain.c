@@ -91,13 +91,39 @@ int main(int argc, char *argv[]) {
     gettimeofday(&start, NULL);
 
     // connect VNAs
-    initialise_port_array();
-    for (int i = 0; i < num_ports_given; i++)
-        add_vna(ports[i]);
+    if (initialise_port_array() != 0)
+        fprintf(stderr, "failed to init port array");
+    for (int i = 0; i < num_ports_given; i++) {
+        if (add_vna(ports[i]) != 0)
+            fprintf(stderr, "couldn't add vna \n");
+    }
 
     // call a scan
     const char *user_label = "ManualRun";
-    run_multithreaded_scan(get_vna_count(), nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label);
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    if (!vna_list) {
+        fprintf(stderr, "couldn't assign space for vna ids");
+        return EXIT_FAILURE;
+    }
+    int nbr_vnas = get_connected_vnas(vna_list);
+    if (nbr_vnas < 1) {
+        printf("%d vnas not enough", nbr_vnas);
+        return EXIT_FAILURE;
+    }
+
+    int id = start_sweep(nbr_vnas, vna_list, nbr_scans, start_freq, stop_freq, sweep_mode, sweeps, pps, user_label,true);
+
+    // wait for scan to be done, then call stop_sweep
+    if (sweep_mode == TIME) {
+        sleep(sweeps);
+    } else if (sweep_mode == NUM_SWEEPS) {
+        char* state_buffer = calloc(sizeof(char),8);
+        do {
+            sleep(1);
+            get_state(id,state_buffer);
+        } while (state_buffer[0] != 'i');
+    }
+    stop_sweep(id);
 
     // disconnect VNAs
     teardown_port_array();

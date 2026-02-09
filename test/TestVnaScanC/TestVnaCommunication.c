@@ -16,20 +16,15 @@ void init_test_ports() {
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
     vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
+
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++)
+        vna_fds[i] = -1;
+    
     total_vnas = 0;
 }
 
 void open_test_ports() {
     for (int i = 0; i < vnas_mocked; i++) {
-        /**
-        vna_names[i] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-        strncpy(vna_names[i],mock_ports[i],MAXIMUM_VNA_PATH_LENGTH);
-        vna_fds[i] = open_serial(mock_ports[i],&vna_initial_settings[i]);
-        if (vna_fds[i] >= 0)
-            total_vnas++;
-        else
-            fprintf(stderr,"failed to connect vna %d\n",i);
-        */
        add_vna(mock_ports[i]);
     }
 }
@@ -213,6 +208,41 @@ void test_in_vna_list_empty() {
 }
 
 /**
+ * get_connected_vnas
+ */
+void test_get_connected_vnas() {
+    if (!vnas_mocked)
+        TEST_IGNORE_MESSAGE("Cannot test without mocking serial connection");
+    
+    open_test_ports();
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        vna_list[i] = -1;
+    }
+
+    TEST_ASSERT_EQUAL_INT(vnas_mocked, get_connected_vnas(vna_list));
+    for (int i = 0; i < vnas_mocked; i++) {
+        TEST_ASSERT_GREATER_OR_EQUAL(0,vna_list[i]);
+    }
+    TEST_ASSERT_EQUAL_INT(-1,vna_list[vnas_mocked]);
+
+    free(vna_list);
+}
+void test_get_connected_vnas_no_vnas() {
+    int* vna_list = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        vna_list[i] = -1;
+    }
+
+    TEST_ASSERT_EQUAL_INT(0, get_connected_vnas(vna_list));
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        TEST_ASSERT_GREATER_OR_EQUAL(-1,vna_list[i]);
+    }
+
+    free(vna_list);
+}
+
+/**
  * add_vna
  */
 void test_add_vna_adds() {
@@ -340,6 +370,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_in_vna_list_true);
     RUN_TEST(test_in_vna_list_false);
     RUN_TEST(test_in_vna_list_empty);
+
+    RUN_TEST(test_get_connected_vnas);
+    RUN_TEST(test_get_connected_vnas_no_vnas);
 
     RUN_TEST(test_add_vna_adds);
     RUN_TEST(test_add_vna_fails_max_vnas);

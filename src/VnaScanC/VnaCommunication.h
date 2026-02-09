@@ -6,6 +6,7 @@
 #include <string.h>
 #include <termios.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <signal.h>
 
@@ -30,6 +31,9 @@ void fatal_error_signal(int sig);
 
 /**
  * Opens a serial port and configures its settings
+ * 
+ * On apple devices, attempts to connect a usbmodem device
+ * if /dev/ttyACM* doens't work.
  * 
  * @param port The device path (e.g., "/dev/ttyACM0")
  * @param init_tty Memory location to store the initial settings of the port
@@ -103,6 +107,20 @@ int get_vna_count();
 int in_vna_list(const char* vna_path);
 
 /**
+ * @return true if there is a vna connected with this id, false if not
+ */
+bool is_connected(int vna_id);
+
+/**
+ * Creates a list of all connected VNAs
+ * 
+ * @param vna_list the address at which to put the array of VNAs 
+ * (should be of length >= MAXIMUM_VNA_PORTS)
+ * @return number of VNAs in list
+ */
+int get_connected_vnas(int* vna_list);
+
+/**
  * Adds a path to a file representing a VNA connection to ports
  * 
  * Checks that path is a valid length, there is space in ports,
@@ -116,9 +134,10 @@ int add_vna(char* vna_path);
 /**
  * Closes, restores and removes a VNA given its file path.
  * 
- * May reorder the ports array.
- * Will free relevant memory but otherwise leave data,
- * but keeps total_vnas accurate.
+ * Will not reorder the ports array.
+ * Will free name memory and restore fds to -1,
+ * but will leave restore_settings data
+ * keeps total_vnas accurate.
  * 
  * @param vna_path a string pointing to the NanoVNA connection file
  * @return 0 if successful, 1 if fails.
@@ -128,9 +147,10 @@ int remove_vna_name(char* vna_path);
 /**
  * Closes, restores and removes a VNA given its index in the arrays.
  * 
- * May reorder the ports array.
- * Will free relevant memory but otherwise leave data,
- * but keeps total_vnas accurate.
+ * Will not reorder the ports array.
+ * Will free name memory and restore fds to -1,
+ * but will leave restore_settings data
+ * keeps total_vnas accurate.
  * 
  * @param vna_num index of VNA in internal arrays.
  * @return 0 if successful, 1 if fails.
@@ -146,6 +166,12 @@ int remove_vna_number(int vna_num);
  */
 int find_vnas(char** paths, const char* search_dir);
 
+/**
+ * Calls find_vnas on the /dev directory, and attempts to add all
+ * serial ports returned by that.
+ * 
+ * @return number of VNAs successfully added
+ */
 int add_all_vnas();
 
 /**
