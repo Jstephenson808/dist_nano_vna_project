@@ -1,7 +1,7 @@
 #include "VnaCommandParser.h"
 
 // Validation function to check if token is a valid integer
-int isValidInt(const char* tok) {
+int is_valid_int(const char* tok) {
     if (tok == NULL || tok[0] == '\0') {
         return 0;
     }
@@ -29,7 +29,7 @@ int isValidInt(const char* tok) {
 }
 
 // Validation function to check if token is a valid long
-int isValidLong(const char* tok) {
+int is_valid_long(const char* tok) {
     if (tok == NULL || tok[0] == '\0') {
         return 0;
     }
@@ -241,7 +241,7 @@ void help() {
 int get_vna_list_from_args(char* tok, int* vnas) {
     int count = 0;
     while (tok != NULL && count < MAXIMUM_VNA_PORTS) {
-        if (!isValidInt(tok)) {
+        if (!is_valid_int(tok)) {
             printf("ERROR: vna ids must be valid integers.\n");
             return -1;
         }
@@ -316,7 +316,7 @@ void sweep() {
                 }
             }
         } else {
-            if (!isValidInt(tok)) {
+            if (!is_valid_int(tok)) {
                 printf("ERROR: scan id must be a valid integer.\n");
                 return;
             }
@@ -393,7 +393,7 @@ void set() {
             fprintf(stderr,"ERROR: No value provided for start frequency.\n");
             return;
         }
-        if (!isValidLong(tok)) {
+        if (!is_valid_long(tok)) {
             fprintf(stderr,"ERROR: Start frequency must be a number.\n");
             return;
         }
@@ -419,7 +419,7 @@ void set() {
             printf("ERROR: No value provided for stop frequency.\n");
             return;
         }
-        if (!isValidLong(tok)) {
+        if (!is_valid_long(tok)) {
             printf("ERROR: Stop frequency must be a number.\n");
             return;
         }
@@ -445,7 +445,7 @@ void set() {
             printf("ERROR: No value provided for resolution.\n");
             return;
         }
-        if (!isValidInt(tok)) {
+        if (!is_valid_int(tok)) {
             printf("ERROR: Resolution must be a valid integer.\n");
             return;
         }
@@ -464,7 +464,7 @@ void set() {
             printf("ERROR: No value provided for number of scans.\n");
             return;
         }
-        if (!isValidInt(tok)) {
+        if (!is_valid_int(tok)) {
             printf("ERROR: Number of scans must be a valid integer.\n");
             return;
         }
@@ -483,7 +483,7 @@ void set() {
             printf("ERROR: No value provided for points per scan.\n");
             return;
         }
-        if (!isValidInt(tok)) {
+        if (!is_valid_int(tok)) {
             printf("ERROR: Points per scan must be a valid integer.\n");
             return;
         }
@@ -502,7 +502,7 @@ void set() {
             printf("ERROR: No value provided for number of sweeps.\n");
             return;
         }
-        if (!isValidInt(tok)) {
+        if (!is_valid_int(tok)) {
             printf("ERROR: Number of sweeps must be a valid integer.\n");
             return;
         }
