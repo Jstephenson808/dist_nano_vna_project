@@ -12,5 +12,5 @@ sleep 1
 
 echo "____ Running Command Parser ____"
 chmod +x VnaCommandParser
-./../src/VnaScanC/VnaCommandParser
-#gdb ./../src/VnaScanC/VnaCommandParser
+./../src/CliApp/VnaCommandParser
+#gdb ./../src/CliApp/VnaCommandParser

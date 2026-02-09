@@ -5,7 +5,7 @@ CLEANUP = rm -f
 MKDIR = mkdir -p
 
 ROOT_DIR = ../..
-TEST_DIR = ${ROOT_DIR}/test/TestVnaScanC
+TEST_DIR = ${ROOT_DIR}/test/TestCliApp
 UNITY_DIR = ${ROOT_DIR}/tools/Unity
 
 UNITY_SOURCE = ${UNITY_DIR}/unity.c

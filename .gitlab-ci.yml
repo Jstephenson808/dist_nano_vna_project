@@ -12,57 +12,57 @@ build_scanner:
   stage: build
   image: gcc:latest
   script:
-    - cd src/VnaScanC
+    - cd src/CliApp
     - make clean
     - make VnaScanMultithreaded CC=gcc 
   artifacts:
     paths:
-      - src/VnaScanC/VnaScanMultithreaded
+      - src/CliApp/VnaScanMultithreaded
     expire_in: 1 hour
 
 build_scanner_tests:
   stage: build
   image: gcc:latest
   script:
-    - cd src/VnaScanC
+    - cd src/CliApp
     - make TestVnaScanMultithreaded CC=gcc  
   artifacts:
     paths:
-      - test/TestVnaScanC/TestVnaScanMultithreaded
+      - test/TestCliApp/TestVnaScanMultithreaded
     expire_in: 1 hour
 
 build_parser:
   stage: build
   image: gcc:latest
   script:
-    - cd src/VnaScanC
+    - cd src/CliApp
     - make clean
     - make VnaCommandParser CC=gcc
   artifacts:
     paths:
-      - src/VnaScanC/VnaCommandParser
+      - src/CliApp/VnaCommandParser
     expire_in: 1 hour
 
 build_parser_tests:
   stage: build
   image: gcc:latest
   script:
-    - cd src/VnaScanC
+    - cd src/CliApp
     - make TestVnaCommandParser CC=gcc  
   artifacts:
     paths:
-      - test/TestVnaScanC/TestVnaCommandParser
+      - test/TestCliApp/TestVnaCommandParser
     expire_in: 1 hour
 
 build_comms_tests:
   stage: build
   image: gcc:latest
   script:
-    - cd src/VnaScanC
+    - cd src/CliApp
     - make TestVnaCommunication CC=gcc  
   artifacts:
     paths:
-      - test/TestVnaScanC/TestVnaCommunication
+      - test/TestCliApp/TestVnaCommunication
     expire_in: 1 hour
 
 test:
@@ -93,13 +93,13 @@ test:
     - echo "Emulators started"
     
     - echo "____ Running Unity Tests ____"
-    - cd test/TestVnaScanC
+    - cd test/TestCliApp
     - chmod +x TestVnaScanMultithreaded
     - chmod +x TestVnaCommandParser
     - chmod +x TestVnaCommunication
     - lsof -p $$ | wc -l
     - timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave  # Pass the two ports, use these for the tests
-    - timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < ../testin.txt
+    - timeout 120s  ./TestVnaCommandParser /tmp/vna0_slave /tmp/vna1_slave < testin.txt
     - timeout 120s  ./TestVnaCommunication /tmp/vna0_slave /tmp/vna1_slave
     - lsof -p $$ | wc -l
 

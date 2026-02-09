@@ -11,7 +11,7 @@ python3 nanovna_emulator.py /tmp/vna1_master --delay 0.001 &
 sleep 1 
 
 echo "____ Running Unity Tests ____"
-cd TestVnaScanC
+cd TestCliApp
 chmod +x TestVnaScanMultithreaded
 timeout 120s  ./TestVnaScanMultithreaded /tmp/vna0_slave /tmp/vna1_slave
 # this line can be used if you need to run with a debugger
