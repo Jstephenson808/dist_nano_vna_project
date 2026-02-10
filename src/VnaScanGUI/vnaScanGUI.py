@@ -1,6 +1,5 @@
 import customtkinter as ctk
 import subprocess
-import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
@@ -25,7 +24,7 @@ class VNAScannerGUI:
         # Main window
         self.root = ctk.CTk()
         self.root.title("VNA Scanner - Multi-threaded Control")
-        self.root.geometry("1600x1000")
+        self.root.geometry("1600x1300")
         self.root.minsize(1200, 700)  # Set minimum window size
         
         # State
