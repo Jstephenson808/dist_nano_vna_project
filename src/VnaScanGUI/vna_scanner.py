@@ -80,9 +80,9 @@ class VNAScanner:
         # Check relative paths from GUI directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
         possible_paths = [
-            os.path.join(base_dir, "..", "VnaScanC", "VnaCommandParser"),
-            os.path.join(base_dir, "..", "..", "src", "VnaScanC", "VnaCommandParser"),
-            "/home/jonasl/Desktop/temp/jh05-main/src/VnaScanC/VnaCommandParser",
+            os.path.join(base_dir, "..", "CliApp", "VnaCommandParser"),
+            os.path.join(base_dir, "..", "..", "src", "CliApp", "VnaCommandParser"),
+            "/home/jonasl/Desktop/temp/jh05-main/src/CliApp/VnaCommandParser",
         ]
         
         for path in possible_paths:
@@ -91,7 +91,7 @@ class VNAScanner:
         
         raise FileNotFoundError(
             "VnaCommandParser not found. Please build it with 'make VnaCommandParser' "
-            "in the VnaScanC directory."
+            "in the CliApp directory."
         )
     
     @staticmethod
@@ -188,6 +188,7 @@ class VNAScanner:
         commands.append(f"set stop {stop_freq}")
         commands.append(f"set scans {num_scans}")
         commands.append(f"set points {points_per_scan}")
+        commands.append(f"set verbose true")
         
         if time_mode and time_limit > 0:
             commands.append(f"set sweeps {time_limit}")

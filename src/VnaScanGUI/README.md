@@ -58,7 +58,7 @@ This project provides a modern linux GUI application built with Python and Custo
 ### 1. Clone Repository
 
 ```bash
-git clone https://stgit.dcs.gla.ac.uk/team-project-h/2025/jh05/jh05-main.git
+git clone https://github.com/Jstephenson808/dist_nano_vna_project.git
 cd jh05-main
 ```
 
