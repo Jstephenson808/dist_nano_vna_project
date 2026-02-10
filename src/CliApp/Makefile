@@ -5,7 +5,7 @@ CLEANUP = rm -f
 MKDIR = mkdir -p
 
 ROOT_DIR = ../..
-TEST_DIR = ${ROOT_DIR}/test/TestVnaScanC
+TEST_DIR = ${ROOT_DIR}/test/TestCliApp
 UNITY_DIR = ${ROOT_DIR}/tools/Unity
 
 UNITY_SOURCE = ${UNITY_DIR}/unity.c
@@ -32,9 +32,6 @@ PARSER_TEST_NAME = ${TEST_DIR}/Test${PARSER_NAME}
 PARSER_TEST_SRC_FILES = ${UNITY_SOURCE} ${PARSER_TEST_NAME}.c $(PARSER_SRC_FILES)
 
 all: TestVnaCommunication VnaScanMultithreaded TestVnaScanMultithreaded VnaCommandParser TestVnaCommandParser
-
-VnaScan:
-	$(CC) $(CFLAGS) VnaScan.c -o VnaScan 
 
 VnaScanMultithreaded:
 	$(CC) $(CFLAGS) $(MULTI_MAIN_SRC_FILES) -o ${MULTI_NAME} ${MULTI_LINK}
@@ -70,4 +67,4 @@ DebugTestVnaCommunication:
 	${CC} ${CFLAGS} ${INC_DIRS} ${SYMBOLS} ${COMMS_TEST_SRC_FILES} -o ${COMMS_TEST_NAME} -g ${MULTI_LINK}
 
 clean:
-	${CLEANUP} VnaScan ${MULTI_NAME} ${MULTI_TEST_NAME} $(PARSER_NAME) $(PARSER_TEST_NAME) $(COMMS_TEST_NAME)
+	${CLEANUP} ${MULTI_NAME} ${MULTI_TEST_NAME} $(PARSER_NAME) $(PARSER_TEST_NAME) $(COMMS_TEST_NAME)

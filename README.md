@@ -18,30 +18,31 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 
 ```
 ├── README.md
-├── src/                                    # Main project directory
-│   ├── VnaScanC/                           
-│   │   ├── Makefile                        # Build configuration
-│   │   ├── VnaCommandParser.c              # Primary driver file with CLI command parser
+├── src/                                # Source Code Directory
+│   ├── CliApp/                             # CLI App
+│   │   ├── Makefile                            # Build configuration
+│   │   ├── VnaCommandParser.c                  # Primary driver file with CLI command parser
 │   │   ├── VnaCommandParser.h
-│   │   ├── VnaCommunication.c              # Helpful methods for interacting with VNAs
+│   │   ├── VnaCommunication.c                  # Helpful methods for interacting with VNAs
 │   │   ├── VnaCommunication.h
-│   │   ├── VnaScan.c                       # Prototype: single-threaded C scanner
-│   │   ├── VnaScanMultithreaded.c          # Main multithreaded scanner implementation
+│   │   ├── VnaScanMultithreaded.c              # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreaded.h
-│   │   └── VnaScanMultithreadedMain.c      # Alternate driver file with no CLI command parser, takes sweep details as Command Line Arguments
-│   └── VnaScanPython/
-│       └── VnaScan.py                      # Prototype: initial Python implementation
+│   │   └── VnaScanMultithreadedMain.c          # Alternate driver file with no CLI command parser, takes sweep details as Command Line Arguments
+│   └── Experiments/                        # Prototypes Directory
+│       ├── VnaScan.c                           # Prototype: single-threaded C scanner
+│       └── VnaScan.py                          # Prototype: initial Python implementation
 └── test/
     ├── nanovna_emulator.py                 # Python emulator for CI/CD testing
-    ├── simulatedTests.sh                   # Bash file for runnings tests with emulator automatically
-    ├── testin.txt                          # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
-    └── TestVnaScanC/
+    ├── simulatedTests.sh                   # Bash script for running tests with emulator automatically
+    ├── runCommandParser.sh                 # Bash script for running command parser with emulated VNAs more easily
+    └── TestCliApp/
         ├── TestVnaCommandParser.c          # Unity tests for CLI command parser
+        ├── testin.txt                      # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
         ├── TestVnaCommunication.c          # Unity tests for VNA methods
         └── TestVnaScanMultithreaded.c      # Unity tests for multithreaded scanner
 ```
 
-**Note:** The prototypes (`vnaScan.c`, `vnaScan.py`) were initial explorations. The actual production implementation is contained within **`VnaScanMultithreaded.c`**, **`VnaScanMultithreadedMain.c`**, and **`VnaCommandParser.c`**.
+**Note:** Directories in src/ correspond to high-level project components. These modules communicate though standard interfaces, and should remain loosely coupled.
 
 ## Requirements
 
@@ -49,7 +50,7 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 - NanoVNA-H device (or compatible VNA)
 
 ### Software
-- **Linux** (tested), macOS, or Windows
+- **Linux** or **macOS**
 - **C Compiler** (Clang or GCC)
 - **Python3**
 - **socat** and **pyserial** for Python (for testing, not required for general use) 
@@ -66,7 +67,7 @@ cd dist_nano_vna_project
 ### 2. Build C Scanner
 
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 make
 ```
 
@@ -79,7 +80,7 @@ This will also create and run unit tests, telling you if they pass or fail.
 The simplest way to run this project is to use the CLI app, `VnaCommandParser`:
 
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 ./VnaCommandParser
 ```
 
@@ -106,41 +107,18 @@ e.g.
 >>> help vna add
 ```
 
+See the [user guide](USERGUIDE.md) for more information and examples.
+
 ### Scanner Only
 
 If you do not wish to use the command parser, you can instead use just the scanner (`VnaScanMultithreaded.c`) compiled with a simple main function, `VnaScanMultithreadedMain.c`:
 
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 ./VnaScanMultithreaded <start_freq> <stop_freq> <nbr_scans> <sweep_mode> <sweeps> <pps> <nbr_nanoVNAs> [ports]
 ```
 
-**Examples:**
-
-Single VNA, single 101 point sweep:
-```bash
-./VnaScanMultithreaded 50000000 900000000 20 -s 5 101 1 /dev/ttyACM0
-```
-
-Single VNA, five 2020 point sweeps:
-```bash
-./VnaScanMultithreaded 50000000 900000000 20 -s 5 101 1 dev/ttyACM0
-```
-
-Single VNA, 2020 point sweeps over the range 50000000-900000000 Hz for 60 seconds:
-```bash
-./VnaScanMultithreaded 50000000 900000000 20 -t 60 101 1 dev/ttyACM0
-```
-
-Multiple VNAs (parallel scanning), five 2020 point sweeps each:
-```bash
-./VnaScanMultithreaded 50000000 900000000 20 -s 5 101 2 dev/ttyACM0 dev/ttyACM1
-```
-
-Multiple VNAs (parallel scanning), five 200 point sweeps each, reading 10 points at a time:
-```bash
-./VnaScanMultithreaded 50000000 900000000 20 -s 5 10 2 dev/ttyACM0 dev/ttyACM1
-```
+See the [user guide](USERGUIDE.md) for more information and examples.
 
 ## Testing
 
@@ -148,7 +126,7 @@ We have a unit testing suite, powered by [ThrowTheSwitch's Unity testing framewo
 
 Our unit tests are contained within the test directory. They can be run individually (after running the Makefile):
 ```bash
-cd test/TestVnaScanC
+cd test/TestCliApp
 ./TestVnaScanMultithreaded
 ./TestVnaCommandParser
 ./TestVnaCommunication
@@ -170,12 +148,12 @@ bash simulatedTests.sh
 For debugging purposes, it is also possible to compile executables with debugging sybols readable by programs like gdb.
 To do this, compile a debug version of the test / program with make, for example:
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 make DebugVnaScanMultithreaded
 ```
 Then you can run the file, or even the simulated tests bash script, with a debugger e.g.
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 gdb VnaScanMultithreaded
 (gdb) run 50000000 900000000 20 -s 5 101 1 /dev/ttyACM0
 ```
@@ -198,23 +176,19 @@ You can configure the Mask, if you so wish, by changing the value where it says
 ```
 in `VnaScanMultithreaded.h`, then recompiling:
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 make clean
 make
 ```
 
-## Documentation
-
-- **[Connection Guide](Basic-Scanner/NanoVNA-H/CONNECTION_GUIDE.md)** - Device setup and troubleshooting
-- **[Benchmark Guide](Basic-Scanner/NanoVNA-H/BENCHMARK_README.md)** - Performance testing
-- **[Quick Test Guide](Basic-Scanner/NanoVNA-H/QUICK_TEST.md)** - Command reference
-
 ## Development
+
+See the [Contributer's Guide](CONTRIBUTING.md) for contribution guidance.
 
 ### Building from Source
 
 ```bash
-cd src/VnaScanC
+cd src/CliApp
 make clean
 make
 ```
@@ -240,7 +214,7 @@ Level 3 Team Project H (2025/2026)
 
 ## License
 
-GNU GPL v3.0
+[GNU GPL v3.0](LICENSE)
 
 ## Acknowledgments
 
