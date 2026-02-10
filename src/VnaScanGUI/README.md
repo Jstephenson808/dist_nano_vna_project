@@ -27,11 +27,10 @@ This project provides a modern linux GUI application built with Python and Custo
 │   └── VnaScanGUI/
 │       ├── README.md                   # This file
 │       ├── requirements.txt            # Python dependencies
-│       └── vnaScanGUI.py               # Main GUI application
+│       └── vna_scan_gui.py            # Main GUI application
 └── test/
     └── TestVnaScanGUI/
         ├── __init__.py
-        ├── README.md                   # Testing documentation
         ├── requirements.txt            # Test dependencies
         └── test_gui_basics.py          # Unit tests for GUI
 ```
@@ -82,13 +81,13 @@ pip install -r src/VnaScanGUI/requirements.txt
 
 ```bash
 cd src/VnaScanGUI
-python3 vnaScanGUI.py
+python3 vna_scan_gui.py
 ```
 
 Or from the project root:
 
 ```bash
-python3 src/VnaScanGUI/vnaScanGUI.py
+python3 src/VnaScanGUI/vna_scan_gui.py
 ```
 
 ### GUI Controls

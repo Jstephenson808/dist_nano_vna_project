@@ -28,6 +28,13 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 │   │   ├── VnaScanMultithreaded.c              # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreaded.h
 │   │   └── VnaScanMultithreadedMain.c          # Alternate driver file with no CLI command parser, takes sweep details as Command Line Arguments
+│   ├── VnaScanGUI/                         # Python GUI Application
+│   │   ├── __pycache__
+│   │   │   └── vna_scanner.cpython-312.pyc
+│   │   ├── README.md
+│   │   ├── requirements.txt
+│   │   ├── vna_scan_gui.py
+│   │   └── vna_scanner.py
 │   └── Experiments/                        # Prototypes Directory
 │       ├── VnaScan.c                           # Prototype: single-threaded C scanner
 │       └── VnaScan.py                          # Prototype: initial Python implementation
