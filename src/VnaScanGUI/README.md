@@ -114,7 +114,7 @@ python3 src/VnaScanGUI/vna_scan_gui.py
 
 #### Visualization
 
-- **Plot Type**: Select S11 or S21 magnitude display
+- **Plot Type**: Select S11 or S21 magnitude display, combined or SWR.
 - **Clear Data**: Reset the plot and collected data
 
 #### Appearance
@@ -137,7 +137,7 @@ pytest test/TestVnaScanGUI/ -v
 
 ## Integration with C Scanner
 
-The GUI is designed to interface with the `VnaScanMultithreaded` C scanner (located in `src/VnaScanC/`). It constructs command-line arguments and executes the scanner via subprocess, parsing the output for real-time visualization.
+The GUI is designed to interface with the `VnaCommandParser` C scanner (located in `src/CliApp/`). It constructs command-line arguments and executes the scanner via subprocess, parsing the output for real-time visualization.
 
 ## Acknowledgments
 
