@@ -9,7 +9,7 @@ import subprocess
 import threading
 import queue
 import os
-import glob
+import re
 import re
 from dataclasses import dataclass
 from typing import Callable, Optional, List
@@ -82,7 +82,6 @@ class VNAScanner:
         possible_paths = [
             os.path.join(base_dir, "..", "CliApp", "VnaCommandParser"),
             os.path.join(base_dir, "..", "..", "src", "CliApp", "VnaCommandParser"),
-            "/home/jonasl/Desktop/temp/jh05-main/src/CliApp/VnaCommandParser",
         ]
         
         for path in possible_paths:
@@ -90,14 +89,40 @@ class VNAScanner:
                 return os.path.abspath(path)
         
         raise FileNotFoundError(
-            "VnaCommandParser not found. Please build it with 'make VnaCommandParser' "
-            "in the CliApp directory."
+            "VnaCommandParser not found. Please build it with 'make' "
+            "in the src/CliApp directory."
         )
     
-    @staticmethod
-    def detect_vnas() -> List[str]:
-        """Detect available VNA devices (ttyACM ports)"""
-        return sorted(glob.glob("/dev/ttyACM*"))
+    def detect_vnas(self) -> List[str]:
+        """Detect available VNA devices via 'vna list' command.
+        
+        Uses the VnaCommandParser 'vna list' command which handles
+        detection on both Linux and Mac, avoiding duplication of
+        platform-specific detection logic.
+        
+        Returns:
+            List of detected serial port paths
+        """
+        try:
+            result = subprocess.run(
+                [self.parser_path],
+                input="vna list\nexit\n",
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            # Parse output for serial device paths
+            ports = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                # Match paths like /dev/ttyACM0 or /dev/cu.usbmodem*
+                match = re.search(r'(/dev/\S+)', line)
+                if match:
+                    ports.append(match.group(1))
+            return sorted(set(ports))
+        except Exception as e:
+            print(f"Warning: detect_vnas failed: {e}")
+            return []
     
     @property
     def is_scanning(self) -> bool:
@@ -195,9 +220,13 @@ class VNAScanner:
         else:
             commands.append(f"set sweeps {num_sweeps}")
         
-        # Add VNAs
-        for port in ports:
-            commands.append(f"vna add {port}")
+        # Add VNAs - use 'vna add' with no args for auto-detect,
+        # or 'vna add <port>' for specific ports (e.g. mock testing)
+        if ports:
+            for port in ports:
+                commands.append(f"vna add {port}")
+        else:
+            commands.append("vna add")
         
         # Start scan
         if time_mode and time_limit > 0:

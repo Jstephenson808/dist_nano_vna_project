@@ -59,7 +59,7 @@ This project provides a modern linux GUI application built with Python and Custo
 
 ```bash
 git clone https://github.com/Jstephenson808/dist_nano_vna_project.git
-cd jh05-main
+cd dist_nano_vna_project
 ```
 
 ### 2. Create Virtual Environment

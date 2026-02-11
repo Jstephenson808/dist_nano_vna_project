@@ -1,9 +1,9 @@
 import customtkinter as ctk
 import subprocess
+import re
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
-import glob
 import math
 import os
 import sys
@@ -1046,7 +1046,7 @@ class VNAScannerGUI:
         """Start a VNA scan"""
         if not self.scanner_available:
             self.log("ERROR: VnaCommandParser not found!")
-            self.log("Please run 'make VnaCommandParser' in src/VnaScanC/")
+            self.log("Please run 'make' in src/CliApp/")
             return
         
         if self.scanner.is_scanning:
@@ -1173,50 +1173,54 @@ class VNAScannerGUI:
             self.log(f"ERROR reading file: {e}")
     
     def detect_vnas(self):
-        """Auto-detect and validate connected VNA devices"""
-        if self.scanner_available:
-            ports = self.scanner.detect_vnas()
-        else:
-            ports = sorted(glob.glob("/dev/ttyACM*"))
+        """Auto-detect and validate connected VNA devices using 'vna add'.
         
-        if not ports:
-            self.log("No VNA devices found on /dev/ttyACM*")
+        Uses 'vna add' with no arguments which auto-detects and validates
+        all connected NanoVNA-H devices, avoiding duplication of detection
+        logic already in VnaCommunication.c.
+        """
+        if not self.scanner_available:
+            self.log("ERROR: VnaCommandParser not found!")
+            self.log("Please run 'make' in src/CliApp/")
             return
         
-        self.log(f"Found {len(ports)} serial device(s), validating...")
+        self.log("Detecting VNA devices...")
         
-        # Validate each port by trying to add it via VnaCommandParser
-        # Run validation twice - some VNAs need to wake up on first ping
+        try:
+            result = subprocess.run(
+                [self.scanner.parser_path],
+                input="vna add\nvna list\nexit\n",
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+        except Exception as e:
+            self.log(f"ERROR: Detection failed: {e}")
+            return
+        
+        # Log any stderr messages
+        for line in result.stderr.splitlines():
+            if line.strip():
+                self.log(f"  {line.strip()}")
+        
+        # Parse 'vna add' output for how many were added
+        added_match = re.search(r'(\d+) VNAs? successfully added', result.stdout)
+        
+        # Parse 'vna list' output for connected port paths
         valid_ports = []
-        for port in ports:
-            # Test if this is actually a NanoVNA-H (run twice)
-            is_valid = False
-            for attempt in range(2):
-                try:
-                    result = subprocess.run(
-                        [self.scanner.parser_path],
-                        input=f"vna add {port}\nexit\n",
-                        capture_output=True,
-                        text=True,
-                        timeout=2
-                    )
-                    
-                    # Check if it was successfully added (no error message)
-                    if "Serial device is not a NanoVNA-H" not in result.stderr:
-                        is_valid = True
-                        break  # Success, no need for second attempt
-                except Exception as e:
-                    if attempt == 1:  # Only log error on final attempt
-                        self.log(f"✗ {port} - Validation failed: {e}")
-            
-            if is_valid:
-                valid_ports.append(port)
-                self.log(f"✓ {port} - Valid NanoVNA-H")
-            else:
-                self.log(f"✗ {port} - Not a NanoVNA-H or not responding")
+        for line in result.stdout.splitlines():
+            # Match lines containing /dev/ paths (connected VNAs)
+            match = re.search(r'(/dev/\S+)', line)
+            if match:
+                valid_ports.append(match.group(1))
+        valid_ports = sorted(set(valid_ports))
         
         if not valid_ports:
-            self.log("ERROR: No valid NanoVNA-H devices found!")
+            self.log("No VNA devices found")
+            # Clear the stale example ports
+            self.num_vnas.delete(0, "end")
+            self.num_vnas.insert(0, "0")
+            self.ports_text.delete("1.0", "end")
             return
         
         self.num_vnas.delete(0, "end")

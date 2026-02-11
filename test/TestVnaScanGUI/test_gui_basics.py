@@ -215,18 +215,24 @@ class TestGUICommands:
     def test_detect_vnas_with_devices(self, app):
         """Test detect_vnas when devices are found"""
         app.log_text.delete("1.0", "end")
-        mock_ports = ["/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2"]
 
         # Mock the scanner to provide a parser_path
         mock_scanner = MagicMock()
         mock_scanner.parser_path = "/fake/parser/path"
-        mock_scanner.detect_vnas.return_value = mock_ports
         app.scanner = mock_scanner
         app.scanner_available = True
 
-        # Mock successful subprocess validation for all ports
+        # Mock subprocess.run to return output matching 'vna add' + 'vna list'
         mock_result = MagicMock()
-        mock_result.stderr = ""  # No error message means valid device
+        mock_result.stdout = (
+            "Attempting to add all found vnas:\n"
+            "    3 VNAs successfully added\n"
+            "Connected VNAs:\n"
+            "    1. /dev/ttyACM0\n"
+            "    2. /dev/ttyACM1\n"
+            "    3. /dev/ttyACM2\n"
+        )
+        mock_result.stderr = ""
 
         with patch('vna_scan_gui.subprocess.run', return_value=mock_result):
             app.detect_vnas()
