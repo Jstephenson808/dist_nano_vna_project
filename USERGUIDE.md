@@ -1,6 +1,6 @@
 # NanoVNA High-Speed Scanner
 
-User Guide for NanoVNA Scanner. See the [readme](README.md) for further information.
+User Guide for NanoVNA Scanner. See the [readme](README.md) for further information. See the [GUI README](src/VnaScanGUI/README.md) for GUI Usage instructions.
 
 ## Installation
 

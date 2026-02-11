@@ -82,10 +82,12 @@ void test_open_serial_mac_fallback_success(void) {
         TEST_ASSERT_LESS_THAN_INT_MESSAGE(0, raw_fd, "Sanity check: path should not exist on Mac");
 
         // Testing the dynamic function
-        int smart_fd = open_serial(fake_linux_port);
+        struct termios restore_tty;
+        int smart_fd = open_serial(fake_linux_port,&restore_tty);
         TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, smart_fd, "open_serial failed to automatically discover the connected VNA");
 
         // Clean up
+        restore_serial(fake_linux_port,&restore_tty)
         if (smart_fd >= 0) close(smart_fd);
 
     #else

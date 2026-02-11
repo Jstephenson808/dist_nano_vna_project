@@ -6,7 +6,8 @@ A data acquisition system for NanoVNA (Vector Network Analyzer) devices, enablin
 
 ## Overview
 
-This project provides a CLI app for interfacing with multiple NanoVNA-H devices to perform rapid RF measurements.
+This project provides a CLI app for interfacing with multiple NanoVNA-H devices to perform rapid RF measurements, and a GUI to interact with that CLI App graphically and display read-time graphs. 
+See [GUI README](src/VnaScanGUI/README.md) for more information on how to install and use the GUI.
 
 ### Key Features
 
@@ -28,6 +29,11 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 │   │   ├── VnaScanMultithreaded.c              # Main multithreaded scanner implementation
 │   │   ├── VnaScanMultithreaded.h
 │   │   └── VnaScanMultithreadedMain.c          # Alternate driver file with no CLI command parser, takes sweep details as Command Line Arguments
+│   ├── VnaScanGUI/                         # Python GUI Application
+│   │   ├── README.md
+│   │   ├── requirements.txt                    # Packages required for application
+│   │   ├── vna_scan_gui.py                     # Main GUI Application
+│   │   └── vna_scanner.py                      # Scripts for interacting with CLI command parser
 │   └── Experiments/                        # Prototypes Directory
 │       ├── VnaScan.c                           # Prototype: single-threaded C scanner
 │       └── VnaScan.py                          # Prototype: initial Python implementation
@@ -35,11 +41,16 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
     ├── nanovna_emulator.py                 # Python emulator for CI/CD testing
     ├── simulatedTests.sh                   # Bash script for running tests with emulator automatically
     ├── runCommandParser.sh                 # Bash script for running command parser with emulated VNAs more easily
-    └── TestCliApp/
-        ├── TestVnaCommandParser.c          # Unity tests for CLI command parser
-        ├── testin.txt                      # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
-        ├── TestVnaCommunication.c          # Unity tests for VNA methods
-        └── TestVnaScanMultithreaded.c      # Unity tests for multithreaded scanner
+    ├── TestCliApp/
+    │   ├── TestVnaCommandParser.c              # Unity tests for CLI command parser
+    │   ├── testin.txt                          # Plaintext input for TestVnaCommandParser (to be piped in via standard in)
+    │   ├── TestVnaCommunication.c              # Unity tests for VNA methods
+    │   └── TestVnaScanMultithreaded.c          # Unity tests for multithreaded scanner
+    └── TestVnaScanGUI/
+        ├── __init__.py                         
+        ├── requirements.txt                    
+        └── test_gui_basics.py                  # Python tests for vna_scan_gui.py
+
 ```
 
 **Note:** Directories in src/ correspond to high-level project components. These modules communicate though standard interfaces, and should remain loosely coupled.
@@ -47,13 +58,15 @@ This project provides a CLI app for interfacing with multiple NanoVNA-H devices 
 ## Requirements
 
 ### Hardware
+
 - NanoVNA-H device (or compatible VNA)
 
 ### Software
 - **Linux** or **macOS**
 - **C Compiler** (Clang or GCC)
 - **Python3**
-- **socat** and **pyserial** for Python (for testing, not required for general use) 
+- **socat** and **pyserial** for Python (for testing, not required for general use)
+- See [GUI README](src/VnaScanGUI/README.md) for GUI Software requirements
 
 ## Installation
 
@@ -205,11 +218,13 @@ make
 - `VnaCommunication.h` - Header file for above
 
 **Prototypes (Development History):**
+
 - `VnaScan.c` - Initial single-threaded C implementation
 - `VnaScan.py` - Initial Python prototype
 
 ## Team
-Team JH05 - University of Glasgow  
+
+Team JH05 - University of Glasgow
 Level 3 Team Project H (2025/2026)
 
 ## License

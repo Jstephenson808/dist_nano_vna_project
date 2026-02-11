@@ -2,10 +2,17 @@ stages:
   - build
   - test
 
-# Cache pip packages for faster runs
+# Global variables
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  APT_CACHE_DIR: "$CI_PROJECT_DIR/.cache/apt"
+  DEBIAN_FRONTEND: noninteractive
+
+# Cache pip and apt packages for faster runs
 cache:
   paths:
     - .cache/pip
+    - .cache/apt
   key: ${CI_COMMIT_REF_SLUG}
 
 build_scanner:
@@ -67,18 +74,25 @@ build_comms_tests:
 
 test:
   stage: test
-  image: python:3.11
+  image: gcc:latest
   dependencies:
     - build_scanner
     - build_scanner_tests
     - build_parser
     - build_parser_tests
     - build_comms_tests
+  needs:
+    - build_scanner
+    - build_scanner_tests
+    - build_parser
+    - build_parser_tests
+    - build_comms_tests
   interruptible: true
-  timeout: 5m
+  timeout: 10m
   before_script:
-    - apt-get update && apt-get install -y socat lsof
-    - pip install --cache-dir .cache/pip pyserial
+    - mkdir -p $APT_CACHE_DIR
+    - apt-get update && apt-get -o dir::cache::archives="$APT_CACHE_DIR" install -y python3 python3-pip socat lsof
+    - pip3 install --break-system-packages pyserial
   script:
     - echo "____ Starting Virtual Serial Ports ____"
     - socat -d -d pty,raw,echo=0,link=/tmp/vna0_master pty,raw,echo=0,link=/tmp/vna0_slave 2>&1 &
@@ -107,3 +121,23 @@ test:
     - echo "Killing all background processes..."
     - pkill -9 python3 || true
     - pkill -9 socat || true
+
+test_gui:
+  stage: test
+  image: python:3.11
+  interruptible: true
+  timeout: 10m
+  before_script:
+    - mkdir -p $APT_CACHE_DIR
+    - apt-get update && apt-get -o dir::cache::archives="$APT_CACHE_DIR" install -y xvfb libx11-6 libxext6 libxrender1 libxi6 libxtst6 libxrandr2
+    - pip install pytest pytest-cov pyserial
+    - pip install -r src/VnaScanGUI/requirements.txt
+  script:
+    - echo "____ Running GUI Tests with Xvfb ____"
+    # Start Xvfb (virtual display) and run tests
+    - Xvfb :99 -screen 0 1024x768x24 &
+    - export DISPLAY=:99
+    - sleep 2
+    - pytest test/TestVnaScanGUI/ -v --tb=short
+  after_script:
+    - pkill -9 Xvfb || true
