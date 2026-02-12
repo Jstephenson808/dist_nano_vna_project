@@ -208,7 +208,7 @@ make
 
 ### Code Structure
 
-**Main Implementation:**
+**CLI App:**
 - `VnaScanMultithreaded.c` - Functions to allow for multiple, multithreaded, multi-VNA scans.
 - `VnaScanMultithreaded.h` - Header file, declares data structures and function prototypes.
 - `VnaScanMultithreadedMain.c` - Driver file, takes in command line arguments and starts a scan.
@@ -216,6 +216,10 @@ make
 - `VnaCommandParser.h` - Header file for above
 - `VnaCommunication.c` - Contains many useful functions for interacting with VNAs. Imported by all files dealing with VNAs directly.
 - `VnaCommunication.h` - Header file for above
+
+**GUI App:**
+- `vna_scan_gui.py` - Handles GUI creation, user interaction, and graph drawing
+- `vna_scanner` - Handles sending commands to and receiving data from C API (VnaCommandParser)
 
 **Prototypes (Development History):**
 
