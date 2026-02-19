@@ -181,17 +181,14 @@ struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps) 
     data->point = malloc(sizeof(struct nanovna_raw_datapoint) * pps);
     if (!data->point) {
         fprintf(stderr, "Failed to allocate memory for raw data points\n");
-        free(data);
-        return NULL;
+        goto pull_scan_error_data_free;
     }
 
     // Find binary header and read first point
     int header_found = find_binary_header(vna_id, &data->point[0], MASK, pps);
     if (header_found != EXIT_SUCCESS) {
         fprintf(stderr, "Failed to find binary header\n");
-        free(data->point);
-        free(data);
-        return NULL;
+        goto pull_scan_error_point_free;
     }
 
     // Receive data points
@@ -204,9 +201,7 @@ struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps) 
         if (bytes_read != sizeof(struct nanovna_raw_datapoint)) {
             fprintf(stderr, "Error reading data point %d: got %zd bytes, expected %zu\n", 
                     i, bytes_read, sizeof(struct nanovna_raw_datapoint));
-            free(data->point);
-            free(data);
-            return NULL;
+            goto pull_scan_error_point_free;
         }
     }
 
@@ -217,6 +212,12 @@ struct datapoint_nanoVNA_H* pull_scan(int vna_id, int start, int stop, int pps) 
     data->send_time = send_time;
     data->receive_time = receive_time;
     return data;
+
+pull_scan_error_point_free:
+    free(data->point);
+pull_scan_error_data_free:
+    free(data);
+    return NULL;
 }
 
 //----------------------------------------
@@ -229,9 +230,8 @@ void* scan_producer(void *arguments) {
     int pps = args->bfr->pps;
 
     for (int sweep = 0; sweep < args->nbr_sweeps; sweep++) {
-        if (args->nbr_sweeps > 1) {
+        if (args->nbr_sweeps > 1)
             printf("[Producer] Starting sweep %d/%d\n", sweep + 1, args->nbr_sweeps);
-        }
 
         int current = args->start;
         int step = (int)round(args->stop - args->start) / ((args->nbr_scans*pps)-1);
@@ -297,10 +297,8 @@ void* scan_consumer(void *arguments) {
     while (!args->bfr->complete || (args->bfr->count != 0)) {
 
         struct datapoint_nanoVNA_H *data = take_buff(args->bfr);
-        if (!data) {
-            // take_buff has returned nothing as there was nothing left to take
+        if (!data)
             return NULL;
-        }
 
         double send_secs = ((double)(data->send_time.tv_sec - args->program_start_time.tv_sec) + 
                             (double)(data->send_time.tv_usec - args->program_start_time.tv_usec) / 1e6);
@@ -385,25 +383,27 @@ STATIC int initialise_scan_state() {
     if (scan_states == NULL) {
         ongoing_scans = 0;
         scan_states = calloc(sizeof(int),MAX_ONGOING_SCANS);
-        if (!scan_states) {
-            pthread_mutex_unlock(&scan_state_lock);
-            return EXIT_FAILURE;
-        }
+        if (!scan_states)
+            goto initialise_scan_state_error_unlock_mutex;
+        
         for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
             scan_states[i] = -1;
         }
     }
     if (scan_threads == NULL) {
         scan_threads = calloc(sizeof(pthread_t),MAX_ONGOING_SCANS);
-        if (!scan_threads) {
-            free(scan_states);
-            scan_states = NULL;
-            pthread_mutex_unlock(&scan_state_lock);
-            return EXIT_FAILURE;
-        }
+        if (!scan_threads)
+            goto initialise_scan_state_error_free_scan_states;
     }
     pthread_mutex_unlock(&scan_state_lock);
     return EXIT_SUCCESS;
+
+initialise_scan_state_error_free_scan_states:
+    free(scan_states);
+    scan_states = NULL;
+initialise_scan_state_error_unlock_mutex:
+    pthread_mutex_unlock(&scan_state_lock);
+    return EXIT_FAILURE;
 }
 
 /**
@@ -422,14 +422,13 @@ STATIC int initialise_scan() {
         pthread_mutex_unlock(&scan_state_lock);
         if (initialise_scan_state() != EXIT_SUCCESS) {
             fprintf(stderr, "Error initialising scan state tracking\n");
-            return -1;
+            goto initialise_scan_error;
         }
         pthread_mutex_lock(&scan_state_lock);
     }
     if (ongoing_scans >= MAX_ONGOING_SCANS) {
         fprintf(stderr, "Max number of active scans ongoing\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
+        goto initialise_scan_error_mutex;
     }
     int scan_id = -1;
     int i = 0;
@@ -440,14 +439,18 @@ STATIC int initialise_scan() {
     }
     if (scan_id < 0 || scan_id >= MAX_ONGOING_SCANS) {
         fprintf(stderr, "how did we get here?\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
+        goto initialise_scan_error_mutex;
     }
     scan_states[scan_id] = 0;
     ongoing_scans++;
 
     pthread_mutex_unlock(&scan_state_lock);
     return scan_id;
+
+initialise_scan_error_mutex:
+    pthread_mutex_unlock(&scan_state_lock);
+initialise_scan_error:
+    return -1;
 }
 
 /**
@@ -516,6 +519,10 @@ void* run_sweep(void* arguments){
     struct run_sweep_args *args = (struct run_sweep_args*)arguments;
 
     int error;
+    struct scan_producer_args producer_args[args->nbr_vnas];
+    struct scan_consumer_args consumer_args;
+    pthread_t producers[args->nbr_vnas];
+    pthread_t consumer;
 
     struct timeval program_start_time;
     gettimeofday(&program_start_time, NULL);
@@ -530,26 +537,19 @@ void* run_sweep(void* arguments){
     struct bounded_buffer *bb = malloc(sizeof(struct bounded_buffer));
     if (!bb) {
         fprintf(stderr, "Failed to allocate memory for bounded buffer construct\n");
-        free(args->vna_list);
-        free(arguments);
-        return NULL;
+        goto run_sweep_error_frees;
     }
     error = create_bounded_buffer(bb,args->nbr_vnas);
     if (error != 0) {
         fprintf(stderr, "Failed to create bounded buffer\n");
         free(bb);
-        free(args->vna_list);
-        free(arguments);
-        return NULL;
+        goto run_sweep_error_frees;
     }
 
     pthread_mutex_lock(&scan_state_lock);
     scan_states[args->scan_id] = args->nbr_vnas;
     pthread_mutex_unlock(&scan_state_lock);
     
-
-    struct scan_producer_args producer_args[args->nbr_vnas];
-    pthread_t producers[args->nbr_vnas];
     for (int i = 0; i < args->nbr_vnas; i++) {
         producer_args[i].scan_id = args->scan_id;
         producer_args[i].vna_id = args->vna_list[i];
@@ -569,23 +569,18 @@ void* run_sweep(void* arguments){
             fprintf(stderr, "Error %i creating producer thread %d: %s\n", errno, i, strerror(errno));
         }
     }
-
-    pthread_t consumer;
-    struct scan_consumer_args consumer_args = {
-        bb, 
-        touchstone_file,
-        id_string,
-        (char*)args->user_label,
-        args->verbose,
-        program_start_time
-    };
+    
+    consumer_args.bfr = bb;
+    consumer_args.touchstone_file = touchstone_file;
+    consumer_args.id_string = id_string;
+    consumer_args.label = (char*)args->user_label;
+    consumer_args.verbose = args->verbose;
+    consumer_args.program_start_time = program_start_time;
+    
     error = pthread_create(&consumer, NULL, &scan_consumer, &consumer_args);
     if(error != 0){
         fprintf(stderr, "Error %i creating consumer thread: %s\n", errno, strerror(errno));
-        destroy_bounded_buffer(bb);
-        free(args->vna_list);
-        free(arguments);
-        return NULL;
+        goto run_sweep_error_bb;
     }
 
     if (args->sweep_mode == TIME) {
@@ -614,11 +609,12 @@ void* run_sweep(void* arguments){
     }
 
     // finish up
+run_sweep_error_bb:
     destroy_bounded_buffer(bb);
+run_sweep_error_frees:
     free(args->vna_list);
     free(arguments);
-
-    return NULL;
+    return NULL;    
 }
 
 int start_sweep(int nbr_vnas, int* vna_list, int nbr_scans, int start, int stop, SweepMode sweep_mode, int sweeps, int pps, const char* user_label, bool verbose) {
@@ -662,13 +658,11 @@ int stop_sweep(int scan_id) {
     pthread_mutex_lock(&scan_state_lock);
     if (scan_states == NULL) {
         fprintf(stderr, "Scan array not initialised\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
+        goto stop_sweep_error;
     }
     if (scan_states[scan_id] == -1) {
         fprintf(stderr, "Not currently scanning\n");
-        pthread_mutex_unlock(&scan_state_lock);
-        return -1;
+        goto stop_sweep_error;
     }
 
     scan_states[scan_id] = 0;
@@ -678,4 +672,8 @@ int stop_sweep(int scan_id) {
     destroy_scan(scan_id);
     
     return EXIT_SUCCESS;
+
+stop_sweep_error:
+    pthread_mutex_unlock(&scan_state_lock);
+    return -1;
 }
