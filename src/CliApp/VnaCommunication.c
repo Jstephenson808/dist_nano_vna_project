@@ -241,6 +241,8 @@ int get_connected_vnas(int* vna_list) {
 }
 
 int add_vna(char* vna_path) {
+    int error_code = 0;
+
     if (total_vnas >= MAXIMUM_VNA_PORTS)
         return 1;
     int path_len = strlen(vna_path);
@@ -261,31 +263,31 @@ int add_vna(char* vna_path) {
             vna_id = i;
         i++;
     }
-    if (vna_id < 0) {
-        fprintf(stderr, "how did we get here? add\n");
+    if (vna_id < 0)
         return -1;
-    }
 
     vna_fds[vna_id] = fd;
 
     if (test_vna(vna_id) != EXIT_SUCCESS) {
-        restore_serial(fd,&vna_initial_settings[vna_id]);
-        close(fd);
-        vna_fds[vna_id] = -1;
-        return 4;
+        error_code = 4;
+        goto add_vna_error_restore;
     }
     
     vna_names[vna_id] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
     if (!vna_names[vna_id]) {
-        restore_serial(fd,&vna_initial_settings[vna_id]);
-        close(fd);
-        vna_fds[vna_id] = -1;
-        return -1;
+        error_code = -1;
+        goto add_vna_error_restore;
     }
     strncpy(vna_names[vna_id],vna_path,path_len);
     total_vnas++;
 
     return EXIT_SUCCESS;
+
+add_vna_error_restore:
+    restore_serial(fd,&vna_initial_settings[vna_id]);
+    close(fd);
+    vna_fds[vna_id] = -1;
+    return error_code;
 }
 
 int remove_vna_name(char* vna_path) {
@@ -399,12 +401,10 @@ void vna_id() {
 
 void vna_ping() {
     for (int i = 0; i < total_vnas; i++) {
-        if (test_vna(i) == 0) {
+        if (test_vna(i) == 0)
             fprintf(stdout,"    %s says pong\n",vna_names[i]);
-        }
-        else {
+        else
             fprintf(stdout,"    failed to ping %s\n",vna_names[i]);
-        }
     }
 }
 
@@ -423,9 +423,8 @@ void vna_status() {
 
 void print_vnas() {
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
-        if (vna_fds[i] >= 0) {
+        if (vna_fds[i] >= 0)
             printf("    %d. %s\n", i, vna_names[i]);
-        }
     }
 }
 
@@ -461,6 +460,7 @@ int initialise_port_array() {
         }
         return EXIT_FAILURE;
     }
+
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++)
         vna_fds[i] = -1;
     total_vnas = 0;
@@ -470,9 +470,8 @@ int initialise_port_array() {
 
 void teardown_port_array() {
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
-        if (is_connected(i)) {
+        if (is_connected(i))
             remove_vna_number(i);
-        }
     }
 
     free(vna_initial_settings);
