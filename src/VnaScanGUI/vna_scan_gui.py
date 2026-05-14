@@ -1240,7 +1240,10 @@ class VNAScannerGUI:
         self.update_points_display(None)
         self.root.mainloop()
 
-if __name__ == "__main__":
+def main():
     app = VNAScannerGUI()
     app.run()
+
+if __name__ == "__main__":
+    main()
     
