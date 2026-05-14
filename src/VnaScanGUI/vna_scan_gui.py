@@ -14,7 +14,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import the VNA scanner wrapper
-from vna_scanner import VNAScanner, VNADataPoint
+from .vna_scanner import VNAScanner, VNADataPoint
 
 
 import colorsys
