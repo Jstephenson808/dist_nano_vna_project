@@ -19,5 +19,9 @@ dependencies = [
     "python-dateutil==2.9.0.post0",
     "six==1.17.0",
 ]
+
+[tool.uv]
+package = true
+
 [project.scripts]
 gui = "VnaScanGUI.vna_scan_gui:main"
