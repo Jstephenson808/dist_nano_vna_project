@@ -368,6 +368,29 @@ void sweep() {
     }
 }
 
+void poll_and_close() {
+    int running = 1;
+    int status;
+    while (running) {
+        running = 0;
+        for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+            if (get_status_num(i, &status) == EXIT_SUCCESS) {
+                if (status > 0) {
+                    running = 1;
+                } else if (status == 0) {
+                    if (stop_sweep(i) != EXIT_SUCCESS)
+                        running = 1;
+                }
+            }
+            else {
+                fprintf(stderr, "couldn't retrieve status for vna %d", i);
+                return;
+            }
+        }
+        sleep(1);
+    }
+}
+
 int calculate_resolution(int res, int* nbr_scans, int* points_per_scan) {
     if (res <= 0) {
         return EXIT_FAILURE;
@@ -664,6 +687,9 @@ int read_command() {
         list();
     } else if (strcmp(tok,"vna") == 0) {
         vna_commands();
+    } else if (strcmp(tok,"close") == 0) {
+        poll_and_close();
+        return 1;
     } else {
         printf("Command not recognised. Type 'help' for list of available commands.\n");
     }

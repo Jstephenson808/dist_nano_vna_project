@@ -266,6 +266,20 @@ bool is_running(int scan_id);
  */
 int get_state(int scan_id, char* state_buffer);
 
+/**
+ * Provides the status of a scan id in integer form.
+ * 
+ * "vacant" = -1
+ * "idle" = 0
+ * "busy" = 1+
+ * "error" = <-1
+ * 
+ * @param status a pointer to a location to store the status number.
+ * @param scan_id ID used to reference the chosen scan thread
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on id out of bounds
+ */
+int get_status_num(int scan_id, int* status);
+
 //----------------------------------------
 // Sweep Logic
 //----------------------------------------

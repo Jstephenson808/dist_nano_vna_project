@@ -235,7 +235,7 @@ class VNAScanner:
             commands.append("scan number")
         
         # Exit after scan
-        # commands.append("exit")
+        commands.append("close")
         
         # Join commands
         command_input = "\n".join(commands) + "\n"
@@ -273,8 +273,6 @@ class VNAScanner:
             stderr_output = self.process.stderr.read()
             if stderr_output and self._status_callback:
                 self._status_callback(f"Process warnings: {stderr_output.strip()}")
-            
-            self.process.stdin.write("exit\n")
                 
         except Exception as e:
             if self._status_callback:
