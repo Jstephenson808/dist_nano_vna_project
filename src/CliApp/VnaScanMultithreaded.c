@@ -591,7 +591,7 @@ void* run_sweep(void* arguments){
     if (args->sweep_mode == TIME) {
         sleep(args->sweeps);
         pthread_mutex_lock(&scan_state_lock);
-        scan_states[args->scan_id] = args->nbr_vnas;
+        scan_states[args->scan_id] = 0;
         pthread_mutex_unlock(&scan_state_lock);
         printf("---\ntimer done\n---\n");
     }

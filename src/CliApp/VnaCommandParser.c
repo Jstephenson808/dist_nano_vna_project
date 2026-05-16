@@ -165,6 +165,7 @@ void help() {
         stop - stopping frequency\n\
         scans - number of scans to compute\n\
         sweeps - number of sweeps to perform\n\
+        time_to_sweep - amount of time to sweep for\n\
         points - number of points per scan\n\
         verbose - if readings should be printed to stdout\n\
     For example: set start 100000000\n");
@@ -514,6 +515,24 @@ void set() {
         }
 
         sweeps = val;
+    } else if (strcmp(tok, "time_to_sweep") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of sweeps.\n");
+            return;
+        }
+        if (!is_valid_int(tok)) {
+            printf("ERROR: Time to sweep must be a valid integer.\n");
+            return;
+        }
+        
+        int val = atoi(tok);
+        if (val <= 0) {
+            printf("ERROR: Time to sweep must be a positive integer.\n");
+            return;
+        }
+
+        time_to_sweep = val;
     } else if (strcmp(tok, "verbose") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
@@ -542,11 +561,11 @@ void list() {
             Number of scans: %d\n\
             Points per scan: %d\n\
         Number of sweeps: %d\n\
+        Time to sweep: %d\n\
         Number of VNAs: %d\n\
         Verbose: %s\n", 
-        start, stop, resolution, nbr_scans, pps, sweeps, get_vna_count(), verbose ? "true" : "false");
+        start, stop, resolution, nbr_scans, pps, sweeps, time_to_sweep, get_vna_count(), verbose ? "true" : "false");
 }
-
 
 void list_vnas() {
     print_vnas();
@@ -656,6 +675,7 @@ int initialise_settings() {
     stop = 900000000;
     resolution = 505;
     nbr_scans = 5;
+    time_to_sweep = 10;
     pps = 101;
     sweeps = 1;
     verbose = false;
