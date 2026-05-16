@@ -216,7 +216,7 @@ class VNAScanner:
         commands.append(f"set verbose true")
         
         if time_mode and time_limit > 0:
-            commands.append(f"set sweeps {time_limit}")
+            commands.append(f"set time_to_sweep {time_limit}")
         else:
             commands.append(f"set sweeps {num_sweeps}")
         
@@ -232,10 +232,10 @@ class VNAScanner:
         if time_mode and time_limit > 0:
             commands.append("scan time")
         else:
-            commands.append("scan sweeps")
+            commands.append("scan number")
         
         # Exit after scan
-        commands.append("exit")
+        # commands.append("exit")
         
         # Join commands
         command_input = "\n".join(commands) + "\n"
@@ -273,6 +273,8 @@ class VNAScanner:
             stderr_output = self.process.stderr.read()
             if stderr_output and self._status_callback:
                 self._status_callback(f"Process warnings: {stderr_output.strip()}")
+            
+            self.process.stdin.write("exit\n")
                 
         except Exception as e:
             if self._status_callback:
