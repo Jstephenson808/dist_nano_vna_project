@@ -1,5 +1,14 @@
 #include "VnaCommunication.h"
 #include <glob.h>
+#include <pthread.h>
+
+// Extern from VnaScanMultithreaded
+extern int get_ongoing_scan_count(void);
+
+/**
+ * Mutex to protect global VNA state arrays (vna_fds, vna_names, etc.)
+ */
+static pthread_mutex_t vna_state_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Current number of connected VNAs
@@ -34,20 +43,39 @@ struct termios* vna_initial_settings = NULL;
  */
 static volatile sig_atomic_t fatal_error_in_progress = 0;
 
+/**
+ * Helper to safely retrieve a file descriptor.
+ * Returns -1 if VNA is not connected or fd array is invalid.
+ */
+static int get_fd_safe(int vna_num) {
+    if (vna_num < 0 || vna_num >= MAXIMUM_VNA_PORTS) return -1;
+    pthread_mutex_lock(&vna_state_lock);
+    int fd = (vna_fds != NULL) ? vna_fds[vna_num] : -1;
+    pthread_mutex_unlock(&vna_state_lock);
+    return fd;
+}
+
 void fatal_error_signal(int sig) {
     if (fatal_error_in_progress) {
         raise (sig);
     }
     fatal_error_in_progress = 1;
 
-    teardown_port_array();
+    // We still try to teardown on fatal error, but it may fail if scans are active.
+    // In a real CLI, we might want a 'force' teardown for SIGINT, 
+    // but here we follow the mandated lifecycle.
+    if (get_ongoing_scan_count() == 0) {
+        teardown_port_array();
+    } else {
+        fprintf(stderr, "\nFatal error: Active scans preventing clean port restoration.\n");
+    }
 
     signal (sig, SIG_DFL);
     raise (sig);
 }
 
 int open_serial(const char *port, struct termios *init_tty) {
-    int fd = open(port, O_RDWR | O_NOCTTY);
+    int fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK); // Open non-blocking for safety
     if (fd < 0) {
          // 2. Dyanmic port detection (MacOS)
         #ifdef __APPLE__
@@ -61,7 +89,7 @@ int open_serial(const char *port, struct termios *init_tty) {
                     char *candidate = glob_result.gl_pathv[i];
 
                     // Attempt to open the candidate port
-                    fd = open(candidate, O_RDWR | O_NOCTTY);
+                    fd = open(candidate, O_RDWR | O_NOCTTY | O_NONBLOCK);
                     i++;
                 }
                 globfree(&glob_result);
@@ -76,6 +104,10 @@ int open_serial(const char *port, struct termios *init_tty) {
         return -1;
         #endif
     }
+
+    // Set to blocking mode for standard operations after open
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 
     if (configure_serial(fd,init_tty) != 0) {
         fprintf(stderr, "Error configuring port %s: %s\n", port, strerror(errno));
@@ -153,49 +185,64 @@ int restore_serial(int fd, const struct termios *settings) {
 }
 
 ssize_t write_command(int vna_num, const char *cmd) {
+    int fd = get_fd_safe(vna_num);
+    if (fd < 0) return -1;
+
     size_t cmd_len = strlen(cmd);
-    ssize_t bytes_written = write(vna_fds[vna_num], cmd, cmd_len);
+    size_t total_written = 0;
     
-    if (bytes_written < 0) {
-        fprintf(stderr, "Error writing to fd %d: %s\n", vna_fds[vna_num], strerror(errno));
-        return -1;
-    } else if (bytes_written < (ssize_t)cmd_len) {
-        fprintf(stderr, "Warning: Partial write (%zd of %zu bytes) on fd %d\n", 
-                bytes_written, cmd_len, vna_fds[vna_num]);
+    while (total_written < cmd_len) {
+        ssize_t bytes_written = write(fd, cmd + total_written, cmd_len - total_written);
+        if (bytes_written < 0) {
+            if (errno == EINTR) continue;
+            fprintf(stderr, "Error writing to fd %d: %s\n", fd, strerror(errno));
+            return -1;
+        }
+        total_written += bytes_written;
     }
     
-    return bytes_written;
+    return (ssize_t)total_written;
 }
 
 ssize_t read_exact(int vna_num, uint8_t *buffer, size_t length) {
-    ssize_t bytes_read = 0;
-    
-    while (bytes_read < (ssize_t)length) {
-        ssize_t n = read(vna_fds[vna_num], buffer + bytes_read, length - bytes_read);
+    ssize_t total_read = 0;
+    int retries = 0;
+    const int max_retries = 3; // Retry on timeout if some data was already read
+
+    while (total_read < (ssize_t)length) {
+        int fd = get_fd_safe(vna_num);
+        if (fd < 0) return -1;
+
+        ssize_t n = read(fd, buffer + total_read, length - total_read);
         
         if (n < 0) {
-            fprintf(stderr, "Error reading from fd %d: %s\n",
-                     vna_fds[vna_num], strerror(errno));
+            if (errno == EINTR || errno == EAGAIN) continue;
+            fprintf(stderr, "Error reading from fd %d: %s\n", fd, strerror(errno));
             return -1;
         } else if (n == 0) {
-            // Timeout or end of file
-            if (bytes_read > 0) {
-                fprintf(stderr, "Timeout: only read %zd of %zu bytes from fd %d\n", 
-                        bytes_read, length, vna_fds[vna_num]);
+            // Timeout reached (due to VMIN=0, VTIME=10)
+            if (total_read > 0 && retries < max_retries) {
+                retries++;
+                continue; 
             }
-            return bytes_read;
+            // Fatal timeout or EOF
+            return total_read; 
         }
         
-        bytes_read += n;
+        total_read += n;
+        retries = 0; // Reset retries on successful read
     }
     
-    return bytes_read;
+    return total_read;
 }
 
 #define INFO_SIZE 292
 
 int test_vna(int vna_num) {
-    tcflush(vna_fds[vna_num],TCIOFLUSH);
+    int fd = get_fd_safe(vna_num);
+    if (fd < 0) return EXIT_FAILURE;
+
+    tcflush(fd, TCIOFLUSH);
     const char *msg = "info\r";
     if (write_command(vna_num, msg) < 0) {
         fprintf(stderr, "Failed to send info command\n");
@@ -204,6 +251,8 @@ int test_vna(int vna_num) {
 
     char buffer[INFO_SIZE+1];
     int num_bytes = read_exact(vna_num,(uint8_t*)buffer,INFO_SIZE);
+    if (num_bytes < INFO_SIZE) return EXIT_FAILURE;
+
     buffer[num_bytes] = '\0';
     if (strstr(buffer,"NanoVNA-H"))
         return EXIT_SUCCESS;
@@ -216,27 +265,32 @@ int get_vna_count() {
 }
 
 int in_vna_list(const char* vna_path) {
-    for (int i = 0; i < total_vnas; i++) {
-        if (strcmp(vna_path,vna_names[i]) == 0)
+    pthread_mutex_lock(&vna_state_lock);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (vna_names && vna_names[i] && strcmp(vna_path,vna_names[i]) == 0) {
+            pthread_mutex_unlock(&vna_state_lock);
             return 1;
+        }
     }
+    pthread_mutex_unlock(&vna_state_lock);
     return 0;
 }
 
 bool is_connected(int vna_id) {
-    return (vna_fds[vna_id] >= 0);
+    return (get_fd_safe(vna_id) >= 0);
 }
 
 int get_connected_vnas(int* vna_list) {
     int count = 0;
-    int i = 0;
-    while (count < total_vnas) {
-        if (vna_fds[i] >= 0) {
-            vna_list[count] = i;
-            count++;
+    pthread_mutex_lock(&vna_state_lock);
+    if (vna_fds) {
+        for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+            if (vna_fds[i] >= 0) {
+                vna_list[count++] = i;
+            }
         }
-        i++;
     }
+    pthread_mutex_unlock(&vna_state_lock);
     return count;
 }
 
@@ -250,95 +304,105 @@ int add_vna(char* vna_path) {
     if (in_vna_list(vna_path))
         return 3;
     
-    int fd = open_serial(vna_path,&vna_initial_settings[total_vnas]);
+    struct termios temp_settings;
+    int fd = open_serial(vna_path, &temp_settings);
     if (fd < 0)
         return -1;
 
+    pthread_mutex_lock(&vna_state_lock);
     int vna_id = -1;
-    int i = 0;
-    while (i < MAXIMUM_VNA_PORTS && vna_id < 0) {
-        if (vna_fds[i] < 0)
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (vna_fds[i] < 0) {
             vna_id = i;
-        i++;
+            break;
+        }
     }
+
     if (vna_id < 0) {
-        fprintf(stderr, "how did we get here? add\n");
+        pthread_mutex_unlock(&vna_state_lock);
+        close(fd);
         return -1;
     }
 
     vna_fds[vna_id] = fd;
+    vna_initial_settings[vna_id] = temp_settings;
+    pthread_mutex_unlock(&vna_state_lock);
 
     if (test_vna(vna_id) != EXIT_SUCCESS) {
+        pthread_mutex_lock(&vna_state_lock);
         restore_serial(fd,&vna_initial_settings[vna_id]);
         close(fd);
         vna_fds[vna_id] = -1;
+        pthread_mutex_unlock(&vna_state_lock);
         return 4;
     }
     
-    vna_names[vna_id] = calloc(sizeof(char),MAXIMUM_VNA_PATH_LENGTH);
-    if (!vna_names[vna_id]) {
+    char *name_copy = calloc(sizeof(char), MAXIMUM_VNA_PATH_LENGTH);
+    if (!name_copy) {
+        pthread_mutex_lock(&vna_state_lock);
         restore_serial(fd,&vna_initial_settings[vna_id]);
         close(fd);
         vna_fds[vna_id] = -1;
+        pthread_mutex_unlock(&vna_state_lock);
         return -1;
     }
-    strncpy(vna_names[vna_id],vna_path,path_len);
+    strncpy(name_copy, vna_path, MAXIMUM_VNA_PATH_LENGTH - 1);
+    
+    pthread_mutex_lock(&vna_state_lock);
+    vna_names[vna_id] = name_copy;
     total_vnas++;
+    pthread_mutex_unlock(&vna_state_lock);
 
     return EXIT_SUCCESS;
 }
 
 int remove_vna_name(char* vna_path) {
-    int vna_num = -1;
-
-    int i = 0;
-    while (i < total_vnas && vna_num < 0) {
-        if (strcmp(vna_path,vna_names[i]) == 0) {
-            vna_num = i;
-        }
-        i++;
-    }
-    if (vna_num < 0) {
+    if (get_ongoing_scan_count() > 0) {
+        fprintf(stderr, "Cannot remove VNA while scans are active.\n");
         return EXIT_FAILURE;
     }
 
-    if (restore_serial(vna_fds[vna_num],&vna_initial_settings[vna_num]) != 0 && !fatal_error_in_progress) {
-        fprintf(stderr, "Error %i restoring settings on port %d: %s\n", errno, vna_num, strerror(errno));
+    int vna_num = -1;
+    pthread_mutex_lock(&vna_state_lock);
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (vna_names && vna_names[i] && strcmp(vna_path, vna_names[i]) == 0) {
+            vna_num = i;
+            break;
+        }
     }
-    if (close(vna_fds[vna_num]) != 0 && !fatal_error_in_progress) {
-        fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
-    }
+    pthread_mutex_unlock(&vna_state_lock);
 
-    vna_fds[vna_num] = -1;
-    free(vna_names[vna_num]);
-    vna_names[vna_num] = NULL;
-
-    total_vnas--;
-
-    return EXIT_SUCCESS;
+    if (vna_num < 0) return EXIT_FAILURE;
+    return remove_vna_number(vna_num);
 }
 
 int remove_vna_number(int vna_num) {
-
-    if (vna_num < 0 || vna_num > MAXIMUM_VNA_PORTS) {
-        return EXIT_FAILURE;
-    } else if (vna_fds[vna_num] < 0) {
-        fprintf(stderr, "No connection at vna id %d\n", vna_num);
+    if (get_ongoing_scan_count() > 0) {
+        fprintf(stderr, "Cannot remove VNA while scans are active.\n");
         return EXIT_FAILURE;
     }
 
-    if (restore_serial(vna_fds[vna_num],&vna_initial_settings[vna_num]) != 0 && !fatal_error_in_progress) {
-        fprintf(stderr, "Error %i restoring settings on port %d: %s\n", errno, vna_num, strerror(errno));
+    if (vna_num < 0 || vna_num >= MAXIMUM_VNA_PORTS) return EXIT_FAILURE;
+
+    pthread_mutex_lock(&vna_state_lock);
+    if (!vna_fds || vna_fds[vna_num] < 0) {
+        pthread_mutex_unlock(&vna_state_lock);
+        return EXIT_FAILURE;
     }
-    if (close(vna_fds[vna_num]) != 0 && !fatal_error_in_progress) {
-        fprintf(stderr, "Error %i closing port %d: %s\n", errno, vna_num, strerror(errno));
+
+    int fd = vna_fds[vna_num];
+    if (restore_serial(fd, &vna_initial_settings[vna_num]) != 0 && !fatal_error_in_progress) {
+        fprintf(stderr, "Error restoring settings on port %d\n", vna_num);
     }
+    close(fd);
 
     vna_fds[vna_num] = -1;
-    free(vna_names[vna_num]);
-    vna_names[vna_num] = NULL;
-
+    if (vna_names[vna_num]) {
+        free(vna_names[vna_num]);
+        vna_names[vna_num] = NULL;
+    }
     total_vnas--;
+    pthread_mutex_unlock(&vna_state_lock);
 
     return EXIT_SUCCESS;
 }
@@ -354,14 +418,13 @@ int find_vnas(char** paths, const char* search_dir) {
     while ((dir = readdir(d)) != NULL) {
         if (strstr(dir->d_name,"ttyACM")) {
             char vna_name[MAXIMUM_VNA_PATH_LENGTH];
-            strncpy(vna_name,"/dev/",6);
-            strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-6);
+            snprintf(vna_name, sizeof(vna_name), "/dev/%s", dir->d_name);
 
             if (!in_vna_list(vna_name) && count < MAXIMUM_VNA_PORTS) {
-                paths[count] = NULL;
                 paths[count] = malloc(sizeof(char) * MAXIMUM_VNA_PATH_LENGTH);
                 if (paths[count] == NULL) {
                     fprintf(stderr,"failed to allocate memory\n");
+                    closedir(d);
                     return -1;
                 }
                 strncpy(paths[count],vna_name,MAXIMUM_VNA_PATH_LENGTH);
@@ -378,27 +441,31 @@ int add_all_vnas() {
     int found = find_vnas(paths,"/dev");
     int added = 0;
     for (int i = 0; i < found; i++) {
-        int err = add_vna(paths[i]);
-        if (err != 0)
-            err = add_vna(paths[i]);
-        if (err == 0)
-            added++;
+        if (add_vna(paths[i]) == 0) added++;
+        free(paths[i]);
     }
+    free(paths);
     return added;
 }
 
 void vna_id() {
-    char* buffer = calloc(sizeof(char),8);
-    for (int i = 0; i < total_vnas; i++) {
-        tcflush(vna_fds[i],TCIOFLUSH);
+    char buffer[16];
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        int fd = get_fd_safe(i);
+        if (fd < 0) continue;
+
+        tcflush(fd, TCIOFLUSH);
         write_command(i,"version\r");
-        read_exact(i,(uint8_t *)buffer,7);
-        fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_names[i],buffer);
+        if (read_exact(i,(uint8_t *)buffer, 7) == 7) {
+            buffer[7] = '\0';
+            fprintf(stdout,"    %d. %s NanoVNA-H version %s\n",i,vna_names[i],buffer);
+        }
     }
 }
 
 void vna_ping() {
-    for (int i = 0; i < total_vnas; i++) {
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (get_fd_safe(i) < 0) continue;
         if (test_vna(i) == 0) {
             fprintf(stdout,"    %s says pong\n",vna_names[i]);
         }
@@ -409,12 +476,18 @@ void vna_ping() {
 }
 
 void vna_reset() {
-    for (int i = 0; i < total_vnas; i++) {
-        write_command(i,"reset\r");
+    if (get_ongoing_scan_count() > 0) {
+        fprintf(stderr, "Cannot reset VNAs while scans are active.\n");
+        return;
+    }
+
+    for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
+        if (get_fd_safe(i) >= 0) {
+            write_command(i,"reset\r");
+        }
     }
     teardown_port_array();
     initialise_port_array();
-    // add_all_vnas();
 }
 
 void vna_status() {
@@ -422,11 +495,13 @@ void vna_status() {
 }
 
 void print_vnas() {
+    pthread_mutex_lock(&vna_state_lock);
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
-        if (vna_fds[i] >= 0) {
+        if (vna_fds && vna_fds[i] >= 0) {
             printf("    %d. %s\n", i, vna_names[i]);
         }
     }
+    pthread_mutex_unlock(&vna_state_lock);
 }
 
 int initialise_port_array() {
@@ -437,41 +512,55 @@ int initialise_port_array() {
         return EXIT_FAILURE;
     }
 
+    pthread_mutex_lock(&vna_state_lock);
     if (vna_names) {
-        fprintf(stderr,"port array already initialised, skipping\n");
+        pthread_mutex_unlock(&vna_state_lock);
         return EXIT_SUCCESS;
     }
 
     vna_names = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
-    vna_fds = calloc(sizeof(int),MAXIMUM_VNA_PORTS);
+    vna_fds = malloc(sizeof(int) * MAXIMUM_VNA_PORTS);
     vna_initial_settings = calloc(sizeof(struct termios),MAXIMUM_VNA_PORTS);
+    
     if (!vna_names || !vna_fds || !vna_initial_settings) {
         fprintf(stderr,"failed to allocate memory for port arrays\n");
-        if (vna_names) {
-            free(vna_names);
-            vna_names=NULL;
-        }
-        if (vna_fds) {
-            free(vna_fds);
-            vna_fds=NULL;
-        }
-        if (vna_initial_settings) {
-            free(vna_initial_settings);
-            vna_initial_settings=NULL;
-        }
+        free(vna_names); vna_names = NULL;
+        free(vna_fds); vna_fds = NULL;
+        free(vna_initial_settings); vna_initial_settings = NULL;
+        pthread_mutex_unlock(&vna_state_lock);
         return EXIT_FAILURE;
     }
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++)
         vna_fds[i] = -1;
     total_vnas = 0;
+    pthread_mutex_unlock(&vna_state_lock);
 
     return EXIT_SUCCESS;
 }
 
 void teardown_port_array() {
+    if (get_ongoing_scan_count() > 0) {
+        fprintf(stderr, "Cannot teardown ports while scans are active.\n");
+        return;
+    }
+
+    pthread_mutex_lock(&vna_state_lock);
+    if (vna_fds == NULL) {
+        pthread_mutex_unlock(&vna_state_lock);
+        return;
+    }
+
+    // We can't use remove_vna_number here because it also locks the mutex.
+    // We'll perform manual cleanup.
     for (int i = 0; i < MAXIMUM_VNA_PORTS; i++) {
-        if (is_connected(i)) {
-            remove_vna_number(i);
+        if (vna_fds[i] >= 0) {
+            restore_serial(vna_fds[i], &vna_initial_settings[i]);
+            close(vna_fds[i]);
+            vna_fds[i] = -1;
+            if (vna_names[i]) {
+                free(vna_names[i]);
+                vna_names[i] = NULL;
+            }
         }
     }
 
@@ -481,4 +570,6 @@ void teardown_port_array() {
     vna_names = NULL;
     free(vna_fds);
     vna_fds = NULL;
+    total_vnas = 0;
+    pthread_mutex_unlock(&vna_state_lock);
 }

@@ -244,6 +244,11 @@ void destroy_scan(int scan_id);
 #endif
 
 /**
+ * Returns the number of ongoing scans.
+ */
+int get_ongoing_scan_count(void);
+
+/**
  * Checks if a running scan is occupying a scan_id
  * 
  * @param scan_id ID used to reference the chosen scan thread
