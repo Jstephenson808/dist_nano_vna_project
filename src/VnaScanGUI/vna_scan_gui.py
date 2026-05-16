@@ -14,7 +14,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import the VNA scanner wrapper
-from .vna_scanner import VNAScanner, VNADataPoint
+from vna_scanner import VNAScanner, VNADataPoint
 
 
 import colorsys
@@ -1210,7 +1210,7 @@ class VNAScannerGUI:
         valid_ports = []
         for line in result.stdout.splitlines():
             # Match lines containing /dev/ paths (connected VNAs)
-            match = re.search(r'(/dev/\S+)', line)
+            match = re.search(r'((/dev/)|(/tmp/)\S+)', line)
             if match:
                 valid_ports.append(match.group(1))
         valid_ports = sorted(set(valid_ports))

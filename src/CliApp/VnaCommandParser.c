@@ -552,6 +552,8 @@ void list_vnas() {
     print_vnas();
     char* new_paths[MAXIMUM_VNA_PORTS];
     int new = find_vnas(new_paths,"/dev");
+    if (new == 0)
+        new = find_vnas(new_paths,"/tmp");
     if (new > 0) {
         printf("Other serial devices detected:\n");
         for (int i = 0; i < new; i++) {

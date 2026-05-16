@@ -116,7 +116,7 @@ class VNAScanner:
             for line in result.stdout.splitlines():
                 line = line.strip()
                 # Match paths like /dev/ttyACM0 or /dev/cu.usbmodem*
-                match = re.search(r'(/dev/\S+)', line)
+                match = re.search(r'((/dev/)|(/tmp/)\S+)', line)
                 if match:
                     ports.append(match.group(1))
             return sorted(set(ports))

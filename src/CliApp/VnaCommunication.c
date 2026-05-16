@@ -354,8 +354,13 @@ int find_vnas(char** paths, const char* search_dir) {
     while ((dir = readdir(d)) != NULL) {
         if (strstr(dir->d_name,"ttyACM")) {
             char vna_name[MAXIMUM_VNA_PATH_LENGTH];
-            strncpy(vna_name,"/dev/",6);
-            strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-6);
+
+            char dir_tag[10];
+            strncpy(dir_tag,search_dir,8);
+            strncat(dir_tag,"/",2);
+
+            strncpy(vna_name,dir_tag,10);
+            strncat(vna_name,dir->d_name,MAXIMUM_VNA_PATH_LENGTH-10);
 
             if (!in_vna_list(vna_name) && count < MAXIMUM_VNA_PORTS) {
                 paths[count] = NULL;
@@ -376,6 +381,8 @@ int find_vnas(char** paths, const char* search_dir) {
 int add_all_vnas() {
     char** paths = calloc(sizeof(char*),MAXIMUM_VNA_PORTS);
     int found = find_vnas(paths,"/dev");
+    if (found == 0)
+        found = find_vnas(paths,"/tmp");
     int added = 0;
     for (int i = 0; i < found; i++) {
         int err = add_vna(paths[i]);
