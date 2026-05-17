@@ -70,6 +70,7 @@ void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
         printf("\
+    close: waits until all sweeps are finished then safely exits the program\n\
     exit: safely exits the program\n\
     help: prints a list of all available commands,\n\
           or user guide for specified command\n\

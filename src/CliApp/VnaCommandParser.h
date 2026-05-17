@@ -51,6 +51,14 @@ void scan();
 void sweep();
 
 /**
+ * Blocks until all ongoing sweeps are finished
+ * 
+ * retrieves resources from idle sweeps as it goes
+ * polls every one second
+ */
+void poll_and_close();
+
+/**
  * Calculates a number of scans and points per scan value given a resolution.
  * 
  * @param res the resolution value to assign other things off of
