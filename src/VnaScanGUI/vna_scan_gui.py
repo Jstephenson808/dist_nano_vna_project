@@ -1210,7 +1210,7 @@ class VNAScannerGUI:
         valid_ports = []
         for line in result.stdout.splitlines():
             # Match lines containing /dev/ paths (connected VNAs)
-            match = re.search(r'(/dev/\S+)', line)
+            match = re.search(r'((/dev/)|(/tmp/)\S+)', line)
             if match:
                 valid_ports.append(match.group(1))
         valid_ports = sorted(set(valid_ports))
@@ -1240,7 +1240,10 @@ class VNAScannerGUI:
         self.update_points_display(None)
         self.root.mainloop()
 
-if __name__ == "__main__":
+def main():
     app = VNAScannerGUI()
     app.run()
+
+if __name__ == "__main__":
+    main()
     

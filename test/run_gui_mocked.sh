@@ -10,7 +10,5 @@ python3 nanovna_emulator.py /tmp/vna0_source --delay 0.001 &
 python3 nanovna_emulator.py /tmp/vna1_source --delay 0.001 &
 sleep 1 
 
-echo "____ Running Command Parser ____"
-chmod +x ./../src/CliApp/VnaCommandParser
-./../src/CliApp/VnaCommandParser
-#gdb ./../src/CliApp/VnaCommandParser
+echo "____ Running GUI ____"
+python3 ../src/VnaScanGUI/vna_scan_gui.py

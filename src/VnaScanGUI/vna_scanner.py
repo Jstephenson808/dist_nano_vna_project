@@ -116,7 +116,7 @@ class VNAScanner:
             for line in result.stdout.splitlines():
                 line = line.strip()
                 # Match paths like /dev/ttyACM0 or /dev/cu.usbmodem*
-                match = re.search(r'(/dev/\S+)', line)
+                match = re.search(r'((/dev/)|(/tmp/)\S+)', line)
                 if match:
                     ports.append(match.group(1))
             return sorted(set(ports))
@@ -216,7 +216,7 @@ class VNAScanner:
         commands.append(f"set verbose true")
         
         if time_mode and time_limit > 0:
-            commands.append(f"set sweeps {time_limit}")
+            commands.append(f"set time_to_sweep {time_limit}")
         else:
             commands.append(f"set sweeps {num_sweeps}")
         
@@ -232,10 +232,10 @@ class VNAScanner:
         if time_mode and time_limit > 0:
             commands.append("scan time")
         else:
-            commands.append("scan sweeps")
+            commands.append("scan number")
         
         # Exit after scan
-        commands.append("exit")
+        commands.append("close")
         
         # Join commands
         command_input = "\n".join(commands) + "\n"

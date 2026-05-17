@@ -70,6 +70,7 @@ void help() {
     char* tok = strtok(NULL, " \n");
     if (tok == NULL) {
         printf("\
+    close: waits until all sweeps are finished then safely exits the program\n\
     exit: safely exits the program\n\
     help: prints a list of all available commands,\n\
           or user guide for specified command\n\
@@ -165,6 +166,7 @@ void help() {
         stop - stopping frequency\n\
         scans - number of scans to compute\n\
         sweeps - number of sweeps to perform\n\
+        time_to_sweep - amount of time to sweep for\n\
         points - number of points per scan\n\
         verbose - if readings should be printed to stdout\n\
     For example: set start 100000000\n");
@@ -367,6 +369,29 @@ void sweep() {
     }
 }
 
+void poll_and_close() {
+    int running = 1;
+    int status;
+    while (running) {
+        running = 0;
+        for (int i = 0; i < MAX_ONGOING_SCANS; i++) {
+            if (get_status_num(i, &status) == EXIT_SUCCESS) {
+                if (status > 0) {
+                    running = 1;
+                } else if (status == 0) {
+                    if (stop_sweep(i) != EXIT_SUCCESS)
+                        running = 1;
+                }
+            }
+            else {
+                fprintf(stderr, "couldn't retrieve status for vna %d", i);
+                return;
+            }
+        }
+        sleep(1);
+    }
+}
+
 int calculate_resolution(int res, int* nbr_scans, int* points_per_scan) {
     if (res <= 0) {
         return EXIT_FAILURE;
@@ -514,6 +539,24 @@ void set() {
         }
 
         sweeps = val;
+    } else if (strcmp(tok, "time_to_sweep") == 0) {
+        tok = strtok(NULL, " \n");
+        if (tok == NULL) {
+            printf("ERROR: No value provided for number of sweeps.\n");
+            return;
+        }
+        if (!is_valid_int(tok)) {
+            printf("ERROR: Time to sweep must be a valid integer.\n");
+            return;
+        }
+        
+        int val = atoi(tok);
+        if (val <= 0) {
+            printf("ERROR: Time to sweep must be a positive integer.\n");
+            return;
+        }
+
+        time_to_sweep = val;
     } else if (strcmp(tok, "verbose") == 0) {
         tok = strtok(NULL, " \n");
         if (tok == NULL) {
@@ -542,16 +585,18 @@ void list() {
             Number of scans: %d\n\
             Points per scan: %d\n\
         Number of sweeps: %d\n\
+        Time to sweep: %d\n\
         Number of VNAs: %d\n\
         Verbose: %s\n", 
-        start, stop, resolution, nbr_scans, pps, sweeps, get_vna_count(), verbose ? "true" : "false");
+        start, stop, resolution, nbr_scans, pps, sweeps, time_to_sweep, get_vna_count(), verbose ? "true" : "false");
 }
-
 
 void list_vnas() {
     print_vnas();
     char* new_paths[MAXIMUM_VNA_PORTS];
     int new = find_vnas(new_paths,"/dev");
+    if (new == 0)
+        new = find_vnas(new_paths,"/tmp");
     if (new > 0) {
         printf("Other serial devices detected:\n");
         for (int i = 0; i < new; i++) {
@@ -643,6 +688,9 @@ int read_command() {
         list();
     } else if (strcmp(tok,"vna") == 0) {
         vna_commands();
+    } else if (strcmp(tok,"close") == 0) {
+        poll_and_close();
+        return 1;
     } else {
         printf("Command not recognised. Type 'help' for list of available commands.\n");
     }
@@ -654,6 +702,7 @@ int initialise_settings() {
     stop = 900000000;
     resolution = 505;
     nbr_scans = 5;
+    time_to_sweep = 10;
     pps = 101;
     sweeps = 1;
     verbose = false;

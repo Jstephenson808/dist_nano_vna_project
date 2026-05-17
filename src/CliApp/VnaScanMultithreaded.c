@@ -494,6 +494,19 @@ int get_state(int scan_id, char* state_buffer) {
     return EXIT_SUCCESS;
 }
 
+int get_status_num(int scan_id, int* status) {
+    if (scan_states == NULL || scan_id < 0 || scan_id >= MAX_ONGOING_SCANS)
+        return EXIT_FAILURE;
+
+    pthread_mutex_lock(&scan_state_lock);
+    int state = scan_states[scan_id];
+    pthread_mutex_unlock(&scan_state_lock);
+
+    *status = state;
+
+    return EXIT_SUCCESS;
+}
+
 //----------------------------------------
 // Sweep Logic
 //----------------------------------------
@@ -591,7 +604,7 @@ void* run_sweep(void* arguments){
     if (args->sweep_mode == TIME) {
         sleep(args->sweeps);
         pthread_mutex_lock(&scan_state_lock);
-        scan_states[args->scan_id] = args->nbr_vnas;
+        scan_states[args->scan_id] = 0;
         pthread_mutex_unlock(&scan_state_lock);
         printf("---\ntimer done\n---\n");
     }
